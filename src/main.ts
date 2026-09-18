@@ -5,6 +5,8 @@ import { commitMove, gameStatus, isInCheck, legalMoves, pieceAt, sideToMove, unm
 import { coordinates, formatCell } from './rules/geometry';
 import { createSetup, SETUPS, type SetupId } from './rules/setups';
 import { PIECE_LETTERS, PROFILES, type Cell, type Move, type PieceType, type ProfileId, type Promotion } from './rules/types';
+import { THEMES } from './view/themes';
+import type { Point3, ThemeId } from './view/themes/types';
 import { BoardView, type CameraPreset, type SelectionInput } from './view/board';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -40,6 +42,17 @@ app.innerHTML = `
     </section>
     <aside id="inspect-panel" class="panel inspect-panel">
       <section class="panel-section"><div class="section-title">VIEW & GUIDANCE</div>
+        <label for="theme" class="field-label">Visual theme</label><select id="theme">${THEMES.map(theme => '<option value="' + theme.id + '">' + theme.name + '</option>').join('')}</select>
+        <fieldset id="crystal-options" hidden><legend>Crystal · exaggerated study</legend>
+          <label class="toggle"><span>Cut facets / reflections</span><input type="checkbox" id="crystal-refraction" /><span class="switch"></span></label>
+          <label class="toggle"><span>Spectral / prismatic</span><input type="checkbox" id="crystal-spectral" /><span class="switch"></span></label>
+          <label class="toggle"><span>Caustics / scintillation</span><input type="checkbox" id="crystal-caustics" /><span class="switch"></span></label>
+          <label class="toggle"><span>Cubical inclusions</span><input type="checkbox" id="crystal-inclusions" /><span class="switch"></span></label>
+          <p class="muted small">Compare internal facets with cell inclusions. An intentionally intense study. Toggle components to compare; orbit to catch the light.</p>
+        </fieldset>
+        <label class="toggle"><span>Ambient animation</span><input type="checkbox" id="ambient-effects" checked /><span class="switch"></span></label>
+        <details id="camera-study"><summary>Camera study</summary><div class="director-actions"><button id="focus-piece" class="secondary-button" disabled>Focus selected</button><button id="orbit-piece" class="secondary-button" disabled>Inspect orbit</button></div>
+        <button id="manual-camera" class="text-button">Stop camera motion</button><p class="muted small camera-note">Orbit lasts 12 seconds. Any input returns camera control to you.</p></details>
         <label class="toggle"><span>Path on hover / focus</span><input type="checkbox" id="trajectories" checked /><span class="switch"></span></label>
         <label class="toggle"><span>Piece labels</span><input type="checkbox" id="labels" checked /><span class="switch"></span></label>
         <div class="plane-control"><label for="plane" class="field-label">Inspect a Z level</label><select id="plane"><option value="all">All levels</option>${Array.from({ length: 8 }, (_, z) => '<option value="' + z + '">Z = ' + z + (z === 0 ? ' · White home' : z === 7 ? ' · Black home' : '') + '</option>').join('')}</select></div>
@@ -87,6 +100,7 @@ const pieceRules: Record<PieceType, string> = {
   king: 'Step to any of the 26 neighbouring cells. An attacked destination is never legal.',
 };
 
+const visualPoint = (cell: Cell): Point3 => { const [x, y, z] = coordinates(cell); return [x - 3.5, z - 3.5, y - 3.5]; };
 function announce(text: string): void { element('notice').textContent = text; }
 function closeDepth(): void { element('depth-chooser').hidden = true; }
 function setHover(cell: Cell | null, restoreFocus = true): void {
@@ -145,6 +159,7 @@ function selectPiece(id: number | null): void {
   lastGenerationMs = performance.now() - start;
   view.setSelection(selected, available);
   renderInspector();
+  if (id !== null) view.present({ kind: 'selection', at: visualPoint(state.pieces[id].cell!) });
   clearPreview();
 }
 
@@ -181,7 +196,15 @@ function play(move: Move): void {
       element<HTMLSelectElement>('plane').value = String(coordinates(move.to)[2]); updateOptions();
     }
     render();
+    const at = visualPoint(move.to), from = visualPoint(move.from);
+    view.present({ kind: 'move', from, at, owner });
+    if (move.capturedId !== null) view.present({ kind: 'capture', from, at, owner });
     const status = gameStatus(state);
+    if (isInCheck(state, sideToMove(state))) {
+      const king = state.pieces.find(p => p.owner === sideToMove(state) && p.type === 'king')!;
+      view.present({ kind: 'check', at: visualPoint(king.cell!) });
+    }
+    view.present({ kind: 'position', at });
     announce(status.kind === 'playing' ? title(owner) + ' moved. ' + title(sideToMove(state)) + ' to play.' : status.kind === 'checkmate' ? title(status.winner) + ' wins by checkmate.' : 'Draw: ' + status.reason.replaceAll('-', ' ') + '.');
   } catch (error) { announce(error instanceof Error ? error.message : 'Move rejected'); }
 }
@@ -189,6 +212,8 @@ function play(move: Move): void {
 function renderInspector(): void {
   const piece = selected === null ? null : state.pieces[selected];
   element<HTMLSelectElement>('piece-navigator').value = piece ? String(piece.id) : '';
+  element<HTMLButtonElement>('focus-piece').disabled = !piece;
+  element<HTMLButtonElement>('orbit-piece').disabled = !piece;
   element('selected-glyph').textContent = piece ? PIECE_LETTERS[piece.type] : '◇';
   element('selected-glyph').className = 'selected-glyph ' + (piece?.owner ?? '');
   element('selected-name').textContent = piece ? title(piece.owner) + ' ' + piece.type : 'Explore the cube';
@@ -351,6 +376,22 @@ document.querySelectorAll<HTMLButtonElement>('[data-camera]').forEach(button => 
   clearPreview(); view.preset(button.dataset.camera as CameraPreset);
   document.querySelectorAll('[data-camera]').forEach(el => el.classList.toggle('active', el === button)); closeDepth();
 }));
+element('theme').addEventListener('change', () => {
+  const theme = element<HTMLSelectElement>('theme').value as ThemeId;
+  view.setTheme(theme);
+  element('crystal-options').hidden = theme !== 'crystal';
+  for (const effect of ['refraction', 'spectral', 'caustics', 'inclusions']) element<HTMLInputElement>('crystal-' + effect).checked = theme === 'crystal' && effect !== 'inclusions';
+  if (theme === 'crystal') view.setCrystalEffects({ refraction: true, spectral: true, caustics: true, inclusions: false });
+  announce('Theme changed. Game and movement field retained.');
+});
+for (const effect of ['refraction', 'spectral', 'caustics', 'inclusions']) element('crystal-' + effect).addEventListener('change', () => {
+  view.setCrystalEffects({ refraction: element<HTMLInputElement>('crystal-refraction').checked,
+    spectral: element<HTMLInputElement>('crystal-spectral').checked, caustics: element<HTMLInputElement>('crystal-caustics').checked, inclusions: element<HTMLInputElement>('crystal-inclusions').checked });
+});
+element('ambient-effects').addEventListener('change', () => view.setEffects(element<HTMLInputElement>('ambient-effects').checked));
+element('focus-piece').addEventListener('click', () => { clearPreview(); if (view.focusSelection()) announce('Focusing selected piece. Any input interrupts.'); });
+element('orbit-piece').addEventListener('click', () => { clearPreview(); if (view.focusSelection(true)) announce('Inspecting selected piece. Any input interrupts.'); });
+element('manual-camera').addEventListener('click', () => { view.director.interrupt(); announce('Manual camera control'); });
 element('reset-camera').addEventListener('click', () => { clearPreview(); view.preset('iso'); closeDepth(); });
 element('depth-cancel').addEventListener('click', closeDepth);
 element('help').addEventListener('click', () => element<HTMLDialogElement>('help-dialog').showModal());
@@ -379,6 +420,7 @@ if (import.meta.env.DEV) {
     metrics: () => ({ ...view.metrics }),
     movementField: () => ({ ...view.movementField(), inspectedCell }),
     camera: () => view.camera.position.toArray(),
+    presentation: () => ({ ...view.presentationMetrics(), target: view.controls.target.toArray() }),
   } });
 }
 window.addEventListener('pagehide', event => { if (!event.persisted) view?.dispose(); });

@@ -1,0 +1,266 @@
+{
+  "off": {
+    "static": {
+      "theme": "crystal",
+      "optical": {
+        "refraction": false,
+        "spectral": false,
+        "caustics": false
+      },
+      "director": "manual",
+      "effects": false,
+      "geometries": 34,
+      "textures": 1,
+      "samples": 3,
+      "medianSubmitMs": 1.0999999977648258,
+      "p95SubmitMs": 216.20000000298023,
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "drawCalls": 32,
+      "triangles": 1440,
+      "lastRenderMs": 0.8999999985098839,
+      "renders": 7
+    },
+    "camera": {
+      "theme": "crystal",
+      "optical": {
+        "refraction": false,
+        "spectral": false,
+        "caustics": false
+      },
+      "director": "inspection",
+      "effects": false,
+      "geometries": 34,
+      "textures": 1,
+      "samples": 27,
+      "medianSubmitMs": 0.8999999985098839,
+      "p95SubmitMs": 1.199999999254942,
+      "target": [
+        -0.5,
+        -0.5,
+        -0.5
+      ]
+    },
+    "frameIntervalsMs": [
+      83.30000000000018,
+      83.39999999999964,
+      83.39999999999964,
+      99.90000000000055,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      116.60000000000036,
+      116.69999999999982,
+      133.30000000000018,
+      133.30000000000018,
+      133.39999999999964,
+      183.30000000000018,
+      200,
+      216.59999999999945
+    ]
+  },
+  "refraction": {
+    "static": {
+      "theme": "crystal",
+      "optical": {
+        "refraction": true,
+        "spectral": false,
+        "caustics": false
+      },
+      "director": "manual",
+      "effects": false,
+      "geometries": 35,
+      "textures": 2,
+      "samples": 2,
+      "medianSubmitMs": 891.1999999992549,
+      "p95SubmitMs": 891.1999999992549,
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "drawCalls": 33,
+      "triangles": 1441,
+      "lastRenderMs": 1.800000000745058,
+      "renders": 35
+    },
+    "camera": {
+      "theme": "crystal",
+      "optical": {
+        "refraction": true,
+        "spectral": false,
+        "caustics": false
+      },
+      "director": "inspection",
+      "effects": false,
+      "geometries": 35,
+      "textures": 2,
+      "samples": 26,
+      "medianSubmitMs": 0.8999999985098839,
+      "p95SubmitMs": 1.800000000745058,
+      "target": [
+        -0.5,
+        -0.5,
+        -0.5
+      ]
+    },
+    "frameIntervalsMs": [
+      16.700000000000728,
+      183.20000000000073,
+      183.29999999999927,
+      183.29999999999927,
+      183.3000000000011,
+      183.39999999999964,
+      183.40000000000146,
+      199.89999999999964,
+      200,
+      200,
+      200.09999999999854,
+      216.59999999999854,
+      216.60000000000036,
+      216.6999999999989,
+      216.70000000000073,
+      233.3000000000011,
+      316.7999999999993,
+      333.3000000000011
+    ]
+  },
+  "spectral": {
+    "static": {
+      "theme": "crystal",
+      "optical": {
+        "refraction": false,
+        "spectral": true,
+        "caustics": false
+      },
+      "director": "manual",
+      "effects": false,
+      "geometries": 35,
+      "textures": 2,
+      "samples": 2,
+      "medianSubmitMs": 1.2999999970197678,
+      "p95SubmitMs": 1.2999999970197678,
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "drawCalls": 33,
+      "triangles": 1441,
+      "lastRenderMs": 1.2999999970197678,
+      "renders": 64
+    },
+    "camera": {
+      "theme": "crystal",
+      "optical": {
+        "refraction": false,
+        "spectral": true,
+        "caustics": false
+      },
+      "director": "inspection",
+      "effects": false,
+      "geometries": 35,
+      "textures": 2,
+      "samples": 26,
+      "medianSubmitMs": 0.6999999992549419,
+      "p95SubmitMs": 0.8999999985098839,
+      "target": [
+        -0.5,
+        -0.5,
+        -0.5
+      ]
+    },
+    "frameIntervalsMs": [
+      16.600000000002183,
+      166.5,
+      166.59999999999854,
+      166.70000000000073,
+      183.29999999999927,
+      183.29999999999927,
+      183.29999999999927,
+      183.29999999999927,
+      183.40000000000146,
+      200,
+      200,
+      200,
+      200,
+      200.09999999999854,
+      216.70000000000073,
+      233.29999999999927,
+      233.3000000000029,
+      250.09999999999854
+    ]
+  },
+  "caustics": {
+    "static": {
+      "theme": "crystal",
+      "optical": {
+        "refraction": false,
+        "spectral": false,
+        "caustics": true
+      },
+      "director": "manual",
+      "effects": false,
+      "geometries": 35,
+      "textures": 2,
+      "samples": 2,
+      "medianSubmitMs": 0.6000000014901161,
+      "p95SubmitMs": 0.6000000014901161,
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "drawCalls": 33,
+      "triangles": 1441,
+      "lastRenderMs": 0.6000000014901161,
+      "renders": 93
+    },
+    "camera": {
+      "theme": "crystal",
+      "optical": {
+        "refraction": false,
+        "spectral": false,
+        "caustics": true
+      },
+      "director": "inspection",
+      "effects": false,
+      "geometries": 35,
+      "textures": 2,
+      "samples": 26,
+      "medianSubmitMs": 0.8000000007450581,
+      "p95SubmitMs": 1.1000000014901161,
+      "target": [
+        -0.5,
+        -0.5,
+        -0.5
+      ]
+    },
+    "frameIntervalsMs": [
+      233.39999999999782,
+      233.39999999999782,
+      233.40000000000146,
+      233.40000000000146,
+      249.90000000000146,
+      250,
+      266.6000000000022,
+      266.7000000000007,
+      299.8999999999978,
+      299.8999999999978,
+      316.6000000000022,
+      316.6000000000022,
+      349.90000000000146,
+      350,
+      366.7000000000007,
+      383.3999999999978,
+      383.3999999999978,
+      866.5999999999985
+    ]
+  }
+}

@@ -97,3 +97,14 @@ dialog { max-width: 490px; width: calc(100% - 40px); background: #101c29; color:
 #save-status.save-error { color: var(--capture); }
 .reset-actions { display: flex; gap: 12px; align-items: center; margin-top: 24px; }
 .reset-actions .primary-button { margin-top: 0; }
+
+.director-actions { display: flex; gap: 6px; margin-top: 8px; }
+.director-actions .secondary-button { padding: 9px 7px; flex: 1; font-size: 10px; }
+.camera-note { line-height: 1.5; margin-bottom: 10px; }
+
+#camera-study { margin: 8px 0; }
+#camera-study summary { color: #8dabc0; font-size: 11px; cursor: pointer; padding: 7px 0; }
+
+#crystal-options { margin: 12px 0; padding: 8px 0; border: 0; border-top: 1px solid var(--line); }
+#crystal-options legend { font-size: 10px; color: #8dabc0; padding: 0 6px 0 0; }
+#crystal-options p { line-height: 1.5; }

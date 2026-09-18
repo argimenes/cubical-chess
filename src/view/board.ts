@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { coordinates, formatCell } from '../rules/geometry';
-import type { Cell, GameState, Move, Piece, PieceType } from '../rules/types';
+import { CameraDirector } from './camera-director';
+import { createTheme, disposeVisual } from './themes';
+import type { CrystalEffects, PieceVisual, SceneCue, ThemeId, ThemeRuntime } from './themes/types';
+import type { Cell, Move, Piece } from '../rules/types';
 import { PIECE_LETTERS } from '../rules/types';
 
 export type CameraPreset = 'iso' | 'front' | 'side' | 'top' | 'below';
@@ -24,7 +27,8 @@ const world = (cell: Cell): THREE.Vector3 => {
   return new THREE.Vector3(x - 3.5, z - 3.5, y - 3.5);
 };
 
-interface PieceView { group: THREE.Group; label: CSS2DObject; proxy: THREE.Mesh; target: THREE.Vector3; start: THREE.Vector3 }
+interface ScenePosition { readonly pieces: readonly Readonly<Piece>[] }
+interface PieceView { visual: PieceVisual; group: THREE.Group; label: CSS2DObject; proxy: THREE.Mesh; target: THREE.Vector3; start: THREE.Vector3 }
 
 /** Rendering consumes authoritative cells and moves; it never decides legality. */
 export class BoardView {
@@ -38,6 +42,7 @@ export class BoardView {
   private readonly guide = new THREE.Group();
   private readonly focusOutline: THREE.LineSegments;
   private markers: THREE.InstancedMesh | null = null;
+  private markerBackplates: THREE.InstancedMesh | null = null;
   private fieldMoves: Move[] = [];
   private hovered: Cell | null = null;
   private readonly picks = new THREE.Group();
@@ -48,11 +53,18 @@ export class BoardView {
   private readonly selection: THREE.LineSegments;
   private readonly hoverBox: THREE.LineSegments;
   private readonly plane = new THREE.Group();
-  private readonly shapes: Record<PieceType, THREE.BufferGeometry>;
+  private theme: ThemeRuntime = createTheme('diagnostic');
+  private readonly latticeMaterials: { material: THREE.LineBasicMaterial; role: 'grid' | 'edge' | 'home' }[] = [];
+  readonly director: CameraDirector;
+  private effectsEnabled = true;
+  private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  private renderSamples: number[] = [];
+  private readonly interruptCamera = (): void => { this.director.interrupt(); };
+  private readonly motionPreferenceChanged = (): void => { this.director.interrupt(); this.theme.clearTransient(); this.dirty = true; };
   private readonly axisLabels: CSS2DObject[] = [];
   private readonly resizeObserver: ResizeObserver;
   private options: ViewOptions = { trajectories: true, labels: true, plane: null, isolate: false };
-  private state: GameState | null = null;
+  private state: ScenePosition | null = null;
   private selected: number | null = null;
   private moves: Move[] = [];
   private pointer: { id: number; x: number; y: number; dragged: boolean } | null = null;
@@ -76,6 +88,7 @@ export class BoardView {
     this.labels.domElement.className = 'world-labels';
     this.host.append(this.labels.domElement);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.director = new CameraDirector(this.camera, this.controls);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.12;
     this.controls.minDistance = 7;
@@ -83,25 +96,21 @@ export class BoardView {
     this.controls.minPolarAngle = 0.001;
     this.controls.maxPolarAngle = Math.PI - 0.001;
     this.controls.addEventListener('change', () => { this.dirty = true; });
-    this.scene.add(new THREE.AmbientLight(0xcdeaff, 2));
-    const light = new THREE.DirectionalLight(0xffffff, 3);
-    light.position.set(5, 9, -7);
-    this.scene.add(light, this.assists, this.guide, this.picks, this.plane);
-    this.shapes = {
-      pawn: new THREE.IcosahedronGeometry(0.18, 1),
-      rook: new THREE.BoxGeometry(0.36, 0.36, 0.36),
-      bishop: new THREE.OctahedronGeometry(0.3),
-      knight: new THREE.TorusKnotGeometry(0.16, 0.055, 40, 6, 2, 3),
-      queen: new THREE.IcosahedronGeometry(0.24, 0),
-      king: new THREE.OctahedronGeometry(0.22),
-    };
+    this.scene.add(this.theme.root, this.assists, this.guide, this.picks, this.plane);
+    this.renderer.info.autoReset = false;
+    // Capture phase cancels scripted motion before OrbitControls handles the same input.
+    for (const event of ['pointerdown', 'wheel', 'keydown']) document.addEventListener(event, this.interruptCamera, { capture: true, passive: true });
+    this.reducedMotion.addEventListener('change', this.motionPreferenceChanged);
     this.selection = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.84, 0.84, 0.84)), new THREE.LineBasicMaterial({ color: GOLD, transparent: true, opacity: 0.85 }));
     this.hoverBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.78, 0.78, 0.78)), new THREE.LineBasicMaterial({ color: 0xf0f6ff, transparent: true, opacity: 0.7 }));
     this.selection.visible = this.hoverBox.visible = false;
+    this.selection.layers.set(1); this.hoverBox.layers.set(1);
+    this.camera.layers.enable(1);
     this.scene.add(this.selection, this.hoverBox);
     this.focusOutline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.OctahedronGeometry(1)), new THREE.LineBasicMaterial({ color: GOLD, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false }));
     this.focusOutline.visible = false;
     this.focusOutline.renderOrder = 4;
+    this.focusOutline.layers.set(1);
     this.scene.add(this.focusOutline);
     this.buildLattice();
     this.bindPointers();
@@ -119,15 +128,19 @@ export class BoardView {
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
-    this.scene.add(new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0x6aadd6, transparent: true, opacity: 0.075, depthWrite: false })));
+    const gridMaterial = new THREE.LineBasicMaterial({ color: 0x6aadd6, transparent: true, opacity: 0.075, depthWrite: false });
+    this.latticeMaterials.push({ material: gridMaterial, role: 'grid' });
+    this.scene.add(new THREE.LineSegments(geometry, gridMaterial));
     const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(8, 8, 8)), new THREE.LineBasicMaterial({ color: BLUE, transparent: true, opacity: 0.42 }));
     this.scene.add(edges);
+    this.latticeMaterials.push({ material: edges.material as THREE.LineBasicMaterial, role: 'edge' });
     for (const [height, colour] of [[-4, BLUE], [4, CORAL]]) {
       const grid = new THREE.GridHelper(8, 8, colour, colour);
       grid.position.y = height;
       (grid.material as THREE.Material).transparent = true;
       (grid.material as THREE.Material).opacity = 0.2;
       this.scene.add(grid);
+      this.latticeMaterials.push({ material: grid.material as THREE.LineBasicMaterial, role: 'home' });
     }
     const planeGrid = new THREE.GridHelper(8, 8, GOLD, BLUE);
     (planeGrid.material as THREE.Material).transparent = true;
@@ -150,49 +163,32 @@ export class BoardView {
   }
 
   private createPiece(piece: Piece): PieceView {
-    const colour = piece.owner === 'white' ? BLUE : CORAL;
-    const group = new THREE.Group();
-    const geometry = this.shapes[piece.type];
-    const material = new THREE.MeshStandardMaterial({ color: colour, emissive: colour, emissiveIntensity: 0.38, metalness: 0.25, roughness: 0.45, transparent: true, opacity: 0.85 });
-    const mesh = new THREE.Mesh(geometry, material);
-    group.add(mesh);
-    const wire = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: colour, transparent: true, opacity: 0.9 }));
-    group.add(wire);
-    if (piece.type === 'king') {
-      for (let axis = 0; axis < 3; axis++) {
-        const sizes = [0.09, 0.09, 0.09]; sizes[axis] = 0.67;
-        group.add(new THREE.Mesh(new THREE.BoxGeometry(...sizes as [number, number, number]), material));
-      }
-    }
-    if (piece.type === 'queen') {
-      for (let axis = 0; axis < 3; axis++) {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.017, 4, 24), material);
-        if (axis === 1) ring.rotation.x = Math.PI / 2;
-        if (axis === 2) ring.rotation.y = Math.PI / 2;
-        group.add(ring);
-      }
-    }
+    const visual = this.theme.createPiece(Object.freeze({ type: piece.type, owner: piece.owner }));
+    const group = visual.object;
     const el = document.createElement('span');
     el.className = 'piece-label ' + piece.owner;
     el.textContent = PIECE_LETTERS[piece.type];
     const label = new CSS2DObject(el); label.position.y = 0.44;
     group.add(label);
+    if (this.theme.postprocessing?.preservePieceSilhouettes) group.traverse(object => object.layers.set(2));
     const proxy = new THREE.Mesh(this.pieceProxyGeometry, this.invisible);
     proxy.userData.cell = piece.cell;
     const target = world(piece.cell!);
     group.position.copy(target); proxy.position.copy(target);
     group.userData.type = piece.type;
     this.scene.add(group); this.picks.add(proxy);
-    return { group, label, proxy, target, start: target.clone() };
+    return { visual, group, label, proxy, target, start: target.clone() };
   }
 
-  setState(state: GameState, animate = false): void {
-    this.state = state;
+  setState(state: ScenePosition, animate = false): void {
+    this.director.interrupt();
+    this.theme.clearTransient();
+    this.state = Object.freeze({ pieces: Object.freeze(state.pieces.map(piece => Object.freeze({ ...piece }))) });
     for (const [id, view] of this.pieces) {
       const piece = state.pieces[id];
       if (!piece || piece.cell === null || view.group.userData.type !== piece.type || !animate) {
         this.scene.remove(view.group); this.picks.remove(view.proxy);
-        this.disposeObject(view.group, true); view.label.element.remove(); this.pieces.delete(id);
+        view.visual.dispose(); view.label.element.remove(); this.pieces.delete(id);
       }
     }
     for (const piece of state.pieces) {
@@ -203,13 +199,15 @@ export class BoardView {
       view.proxy.position.copy(view.target); view.proxy.userData.cell = piece.cell;
       if (!animate) view.group.position.copy(view.target);
     }
-    this.animationStart = animate ? performance.now() : 0;
+    this.animationStart = animate && !this.reducedMotion.matches ? performance.now() : 0;
+    if (!this.animationStart) for (const view of this.pieces.values()) view.group.position.copy(view.target);
     this.applyVisibility();
     this.dirty = true;
   }
 
   setSelection(pieceId: number | null, moves: Move[]): void {
-    this.selected = pieceId; this.moves = moves;
+    this.director.interrupt();
+    this.selected = pieceId; this.moves = structuredClone(moves);
     this.hovered = null; this.hoverBox.visible = false;
     const piece = pieceId === null ? null : this.state?.pieces[pieceId];
     this.selection.visible = !!piece && piece.cell !== null;
@@ -245,6 +243,7 @@ export class BoardView {
   private buildAssists(): void {
     this.disposeObject(this.assists); this.assists.clear();
     this.markers = null;
+    this.markerBackplates = null;
     for (const proxy of [...this.picks.children]) if (proxy.userData.destination) this.picks.remove(proxy);
     const unique = [...new Map(this.moves.map(m => [m.to, m])).values()].filter(m => this.cellVisible(m.to));
     this.fieldMoves = unique;
@@ -253,6 +252,14 @@ export class BoardView {
       // The complete field stays readable through occupied cells, including capture endpoints.
       this.markers = new THREE.InstancedMesh(geometry, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.82, depthTest: false, depthWrite: false }), unique.length);
       this.markers.renderOrder = 3;
+      this.markers.layers.set(1);
+      if (this.theme.markerBackdrop !== undefined) {
+        this.markerBackplates = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.15),
+          new THREE.MeshBasicMaterial({ color: this.theme.markerBackdrop, transparent: true, opacity: 1, depthTest: false, depthWrite: false }), unique.length);
+        this.markerBackplates.renderOrder = 2.5;
+        this.markerBackplates.layers.set(1);
+        this.assists.add(this.markerBackplates);
+      }
       for (const m of unique) {
         const proxy = new THREE.Mesh(this.targetProxyGeometry, this.invisible);
         proxy.position.copy(world(m.to)); proxy.userData.cell = m.to; proxy.userData.destination = true;
@@ -275,11 +282,16 @@ export class BoardView {
       if (active) color.lerp(new THREE.Color(0xffffff), 0.25);
       else if (focused) color.multiplyScalar(0.5);
       this.markers!.setMatrixAt(index, matrix); this.markers!.setColorAt(index, color);
+      this.markerBackplates?.setMatrixAt(index, matrix);
     });
     if (this.markers) {
       this.markers.instanceMatrix.needsUpdate = true;
       if (this.markers.instanceColor) this.markers.instanceColor.needsUpdate = true;
       this.markers.computeBoundingSphere();
+    }
+    if (this.markerBackplates) {
+      this.markerBackplates.instanceMatrix.needsUpdate = true;
+      this.markerBackplates.computeBoundingSphere();
     }
     this.focusOutline.visible = !!focused;
     if (focused) {
@@ -309,6 +321,7 @@ export class BoardView {
     const line = new THREE.Line(geometry, move.kind === 'jump' ? new THREE.LineDashedMaterial({ ...style, dashSize: 0.10, gapSize: 0.12 }) : new THREE.LineBasicMaterial(style));
     if (move.kind === 'jump') line.computeLineDistances();
     line.renderOrder = 2;
+    line.layers.set(1);
     this.guide.add(line);
   }
 
@@ -318,6 +331,7 @@ export class BoardView {
     this.hoverBox.visible = cell !== null && this.cellVisible(cell) && !this.moves.some(move => move.to === cell);
     if (cell !== null) this.hoverBox.position.copy(world(cell));
     this.updateFieldFocus();
+    if (cell !== null && this.fieldMoves.some(m => m.to === cell)) this.present({ kind: 'trajectory', at: world(cell).toArray() });
     this.dirty = true;
   }
 
@@ -383,6 +397,7 @@ export class BoardView {
   get isAnimating(): boolean { return this.animationStart !== 0; }
 
   preset(name: CameraPreset): void {
+    this.director.interrupt();
     const aspect = this.camera.aspect;
     const vertical = THREE.MathUtils.degToRad(this.camera.fov / 2);
     const angle = Math.min(vertical, Math.atan(Math.tan(vertical) * aspect));
@@ -398,12 +413,14 @@ export class BoardView {
   }
 
   private resize(): void {
+    this.director.interrupt();
     const width = Math.max(this.host.clientWidth, 1), height = Math.max(this.host.clientHeight, 1);
     const halfFov = THREE.MathUtils.degToRad(this.camera.fov / 2);
     const oldAngle = Math.min(halfFov, Math.atan(Math.tan(halfFov) * this.camera.aspect));
     const newAngle = Math.min(halfFov, Math.atan(Math.tan(halfFov) * width / height));
     this.camera.position.sub(this.controls.target).multiplyScalar(Math.sin(oldAngle) / Math.sin(newAngle)).add(this.controls.target);
     this.camera.aspect = width / height; this.camera.updateProjectionMatrix();
+    this.theme.postprocessing?.resize(width, height, this.renderer.getPixelRatio());
     this.renderer.setSize(width, height); this.labels.setSize(width, height);
     this.dirty = true;
   }
@@ -419,35 +436,108 @@ export class BoardView {
 
   private tick = (): void => {
     this.animationFrame = requestAnimationFrame(this.tick);
+    if (document.hidden) { this.director.interrupt(); return; }
+    const now = performance.now();
+    const directed = this.director.update(now);
     const moved = this.controls.update();
+    const effectsChanged = this.theme.update(now, this.effectsEnabled && !this.reducedMotion.matches);
     if (this.animationStart) {
-      const t = Math.min((performance.now() - this.animationStart) / 190, 1);
-      const ease = 1 - (1 - t) ** 3;
+      const t = Math.min((now - this.animationStart) / this.theme.motion.durationMs, 1);
+      const ease = this.theme.motion.sample(t);
       for (const view of this.pieces.values()) view.group.position.lerpVectors(view.start, view.target, ease);
       if (t === 1) this.animationStart = 0;
       this.dirty = true;
     }
-    if (this.dirty || moved) {
+    if (this.dirty || moved || directed || effectsChanged) {
       const start = performance.now();
-      this.renderer.render(this.scene, this.camera); this.labels.render(this.scene, this.camera);
+      this.renderer.info.reset();
+      if (this.theme.postprocessing && this.theme.postprocessing.enabled !== false) {
+        // Post effects process the world only. Legal markers and guides stay crisp on layer 1.
+        const mask = this.camera.layers.mask, autoClear = this.renderer.autoClear, background = this.scene.background;
+        try {
+          this.camera.layers.set(0);
+          this.theme.postprocessing.render(this.renderer, this.scene, this.camera);
+          this.renderer.setRenderTarget(null); this.renderer.autoClear = false;
+          this.scene.background = null; this.camera.layers.set(1);
+          if (this.theme.postprocessing.preservePieceSilhouettes) this.camera.layers.enable(2);
+          this.renderer.clearDepth();
+          this.renderer.render(this.scene, this.camera);
+        } finally { this.camera.layers.mask = mask; this.renderer.autoClear = autoClear; this.scene.background = background; }
+      } else this.renderer.render(this.scene, this.camera);
+      this.labels.render(this.scene, this.camera);
       this.lastRender = performance.now() - start;
+      this.renderSamples.push(this.lastRender); if (this.renderSamples.length > 120) this.renderSamples.shift();
       this.renders++;
       Object.assign(this.metrics, { drawCalls: this.renderer.info.render.calls, triangles: this.renderer.info.render.triangles, lastRenderMs: this.lastRender, renders: this.renders });
       this.dirty = false;
     }
   };
 
-  private disposeObject(root: THREE.Object3D, keepShapes = false): void {
-    root.traverse(object => {
-      if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
-        if (!keepShapes || !Object.values(this.shapes).includes(object.geometry)) object.geometry.dispose();
-        const materials = Array.isArray(object.material) ? object.material : [object.material];
-        for (const material of materials) material.dispose();
-      }
-    });
+  private disposeObject(root: THREE.Object3D): void { disposeVisual(root); }
+
+  setTheme(id: ThemeId): void {
+    if (id === this.theme.id) return;
+    this.director.interrupt();
+    for (const piece of this.pieces.values()) {
+      this.scene.remove(piece.group); this.picks.remove(piece.proxy); piece.visual.dispose(); piece.label.element.remove();
+    }
+    this.pieces.clear(); this.scene.remove(this.theme.root); this.theme.postprocessing?.dispose(); this.theme.dispose();
+    this.theme = createTheme(id); this.scene.add(this.theme.root); this.scene.background = this.theme.background;
+    this.scene.environment = this.theme.environment ?? null;
+    if (this.theme.postprocessing?.preservePieceSilhouettes) this.camera.layers.enable(2);
+    else this.camera.layers.disable(2);
+    for (const { material, role } of this.latticeMaterials) {
+      material.opacity = role === 'grid' ? this.theme.volume.gridOpacity : role === 'edge' ? this.theme.volume.edgeOpacity : this.theme.volume.homeOpacity;
+      if (role === 'grid') material.color.set(this.theme.volume.gridColor);
+    }
+    this.theme.postprocessing?.resize(this.host.clientWidth, this.host.clientHeight, this.renderer.getPixelRatio());
+    const hovered = this.hovered;
+    if (this.state) this.setState(this.state);
+    this.setSelection(this.selected, this.moves); this.setHover(hovered);
+    this.renderSamples = []; this.dirty = true;
+  }
+
+  setCrystalEffects(effects: CrystalEffects): void {
+    this.theme.optical?.set(effects);
+    this.renderSamples = []; this.dirty = true;
+  }
+
+  setEffects(enabled: boolean): void {
+    this.effectsEnabled = enabled;
+    if (!enabled) this.theme.clearTransient();
+    this.dirty = true;
+  }
+
+  /** Engine/controller decides which event occurred; themes only consume frozen visual descriptors. */
+  present(cue: SceneCue): void {
+    const copy = structuredClone(cue); Object.freeze(copy.at); if ('from' in copy) Object.freeze(copy.from); Object.freeze(copy);
+    if (this.effectsEnabled && !this.reducedMotion.matches) this.theme.onCue(copy, performance.now());
+    this.dirty = true;
+  }
+
+  focusSelection(orbit = false): boolean {
+    const cell = this.selected === null ? null : this.state?.pieces[this.selected]?.cell;
+    if (cell === null || cell === undefined) return false;
+    this.director.focus(world(cell).toArray(), 3.2, performance.now(), this.reducedMotion.matches, orbit);
+    this.dirty = true; return true;
+  }
+
+  presentationMetrics() {
+    const sorted = [...this.renderSamples].sort((a, b) => a - b);
+    return { theme: this.theme.id, optical: this.theme.optical?.get() ?? null, director: this.director.mode, effects: this.effectsEnabled && !this.reducedMotion.matches,
+      geometries: this.renderer.info.memory.geometries, textures: this.renderer.info.memory.textures,
+      samples: sorted.length, medianSubmitMs: sorted[Math.floor(sorted.length / 2)] ?? 0,
+      p95SubmitMs: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] ?? 0 };
   }
 
   dispose(): void {
+    for (const event of ['pointerdown', 'wheel', 'keydown']) document.removeEventListener(event, this.interruptCamera, true);
+    this.reducedMotion.removeEventListener('change', this.motionPreferenceChanged);
+    for (const piece of this.pieces.values()) {
+      this.scene.remove(piece.group); piece.visual.dispose(); piece.label.element.remove();
+    }
+    this.pieces.clear();
+    this.director.interrupt(); this.scene.remove(this.theme.root); this.theme.postprocessing?.dispose(); this.theme.dispose();
     cancelAnimationFrame(this.animationFrame); this.resizeObserver.disconnect(); this.controls.dispose();
     this.disposeObject(this.scene); this.targetProxyGeometry.dispose(); this.pieceProxyGeometry.dispose();
     this.renderer.dispose(); this.labels.domElement.remove(); this.renderer.domElement.remove();

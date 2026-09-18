@@ -42,7 +42,17 @@ The **Spatial study** starts with a central knight and 24 legal destinations. **
 
 `src/rules/` owns the 512-cell state, rule profiles, attack geometry, legal moves, make/unmake, terminal status, and setups. It has no browser or Three.js dependencies. `src/view/board.ts` renders pieces, guides and picking proxies from that state. `src/main.ts` coordinates user commands, status and the move log; it revalidates moves through the rules core before committing them.
 
-The renderer draws on changes and during camera/move animation. Piece geometry is shared, destination markers are instanced, and grid segments are batched. The development build exposes read-only `window.__cubical` diagnostics used by browser tests; there is no test-only move command.
+The default renderer draws on changes and during camera/move animation. Destination markers are instanced and grid segments are batched. Themes own piece visuals, materials, lighting and effects; the common view owns copied positions, picking and movement assistance. The development build exposes read-only `window.__cubical` diagnostics used by browser tests; there is no test-only move command.
+
+## Theme and camera study
+
+**Diagnostic · clean lattice** remains the default. Choose **Luminous · visual study** under View & guidance to try darker surroundings, spatial piece details, surface glints and sparse background scintillation. Gold legal destinations retain their common styling. Turn off **Ambient animation** for static rendering.
+
+Open **Camera study** for **Focus selected** and **Inspect orbit**. Pointer down, wheel or keyboard input immediately returns control to you. Reduced-motion preferences are respected. Theme and camera changes do not alter the game or its save; themes are not persisted yet.
+
+**Crystal · optical study** now opens with an intentionally exaggerated **intact cut cube**: connected outer bevels, internal facet planes, saturated prism bands, travelling caustics and angle-dependent glints. Three switches independently control **Cut facets / reflections**, **Spectral / prismatic** and **Caustics / scintillation**. Enable **Cubical inclusions** to compare an 8×8×8 internal structure with the broad internal facets. Orbit to catch the light, or turn off Ambient animation to compare stills. Sparse geometry replaces the former full-screen optical pass; pieces stay unwarped and gold destinations gain dark contrast backings. See the [exaggerated Crystal study](docs/CRYSTAL_EXAGGERATED_STUDY.md) for screenshots, performance and remaining legibility limits.
+
+See the [architecture spike report](docs/THEME_CAMERA_SPIKE.md) for all four theme directions and the replay/director design. Deep Space, Aquarium, cinematic replay and attract mode remain design directions. Diagnostic and Luminous retain their approved appearance.
 
 ## Current scope
 

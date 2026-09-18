@@ -6,6 +6,7 @@ interface Diagnostics {
   project(cell: number): { x: number; y: number };
   metrics(): { drawCalls: number; triangles: number; lastRenderMs: number; renders: number };
   camera(): number[];
+  presentation(): { optical: { refraction: boolean; spectral: boolean; caustics: boolean; inclusions: boolean } | null; theme: string; director: string; effects: boolean; geometries: number; textures: number; samples: number; medianSubmitMs: number; p95SubmitMs: number; target: number[] };
   movementField(): { cells: number[]; focused: number | null; guideKind: string | null; guideCount: number; points: number[][]; dashed: boolean; inspectedCell: number | null };
 }
 declare global { interface Window { __cubical: Diagnostics } }
@@ -333,4 +334,125 @@ test('blocked storage keeps play usable and reports unsaved changes', async ({ p
   await page.getByRole('button', { name: 'Move to (4, 3, 5)', exact: true }).click();
   expect((await snapshot(page)).ply).toBe(1);
   await expect(page.locator('#save-status')).toContainText('Could not save');
+});
+
+
+test('themes preserve selection, legal field, live state and save; resources recover on return', async ({ page }) => {
+  await load(page, 'spatial-study');
+  const before = await snapshot(page);
+  const saved = await page.evaluate(() => localStorage.getItem('cubical-chess.active-game'));
+  const baseline = await page.evaluate(() => window.__cubical.presentation());
+  for (let i = 0; i < 3; i++) {
+    await page.locator('#theme').selectOption('luminous'); await frame(page);
+    expect((await snapshot(page)).board).toEqual(before.board);
+    expect((await snapshot(page)).selected).toBe(2);
+    expect((await field(page)).cells).toHaveLength(24);
+    await page.locator('#theme').selectOption('diagnostic'); await frame(page);
+    expect((await page.evaluate(() => window.__cubical.presentation())).geometries).toBe(baseline.geometries);
+    expect((await page.evaluate(() => window.__cubical.presentation())).textures).toBe(baseline.textures);
+  }
+  expect(await page.evaluate(() => localStorage.getItem('cubical-chess.active-game'))).toBe(saved);
+  await page.locator('#theme').selectOption('luminous');
+  await page.getByRole('button', { name: 'Move to (4, 3, 5)', exact: true }).focus();
+  expect((await field(page)).guideCount).toBe(1);
+  expect((await field(page)).dashed).toBe(true);
+  await page.getByRole('button', { name: 'Move to (4, 3, 5)', exact: true }).press('Enter');
+  expect((await snapshot(page)).pieces[9].cell).toBeNull();
+  await page.locator('#undo').click();
+  expect((await snapshot(page)).board).toEqual(before.board);
+});
+
+test('camera focus and inspection orbit are presentation-only and immediately interruptible', async ({ page }) => {
+  await load(page, 'spatial-study');
+  const before = await snapshot(page);
+  const saved = await page.evaluate(() => localStorage.getItem('cubical-chess.active-game'));
+  await page.locator('#camera-study summary').click();
+  await page.locator('#focus-piece').click();
+  await expect.poll(async () => (await page.evaluate(() => window.__cubical.presentation())).director).toBe('manual');
+  expect((await page.evaluate(() => window.__cubical.presentation())).target).toEqual([-0.5, -0.5, -0.5]);
+  await page.locator('#orbit-piece').click();
+  expect((await page.evaluate(() => window.__cubical.presentation())).director).toBe('inspection');
+  await page.keyboard.press('Tab');
+  expect((await page.evaluate(() => window.__cubical.presentation())).director).toBe('manual');
+  await page.locator('#orbit-piece').click();
+  await page.mouse.move(500, 500); await page.mouse.wheel(0, 30);
+  await expect.poll(async () => (await page.evaluate(() => window.__cubical.presentation())).director).toBe('manual');
+  await page.locator('#orbit-piece').click();
+  const point = await page.locator('#board canvas').boundingBox();
+  await page.mouse.move(point!.x + 15, point!.y + 15); await page.mouse.down();
+  expect((await page.evaluate(() => window.__cubical.presentation())).director).toBe('manual');
+  await page.mouse.move(point!.x + 60, point!.y + 40); await page.mouse.up();
+  expect((await snapshot(page)).board).toEqual(before.board);
+  expect(await page.evaluate(() => localStorage.getItem('cubical-chess.active-game'))).toBe(saved);
+});
+
+test('luminous reduced-motion mode retains a static field and instant focus', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await load(page, 'spatial-study');
+  await page.locator('#theme').selectOption('luminous');
+  await page.locator('#camera-study summary').click();
+  await page.locator('#orbit-piece').click();
+  await frame(page);
+  const presentation = await page.evaluate(() => window.__cubical.presentation());
+  expect(presentation.director).toBe('manual'); expect(presentation.effects).toBe(false);
+  expect((await field(page)).cells).toHaveLength(24);
+  const renders = await page.evaluate(() => window.__cubical.metrics().renders);
+  await page.waitForTimeout(150);
+  expect(await page.evaluate(() => window.__cubical.metrics().renders)).toBe(renders);
+});
+
+test('records theme study screenshots and comparable camera-motion metrics', async ({ page }) => {
+  await load(page, 'spatial-study');
+  for (const theme of ['diagnostic', 'luminous']) {
+    await page.locator('#theme').selectOption(theme);
+    await page.getByRole('button', { name: 'Isometric', exact: true }).click(); await frame(page);
+    await page.screenshot({ path: 'docs/theme-' + theme + '-study.png' });
+    console.log('Static theme ' + theme + ':', JSON.stringify(await page.evaluate(() => ({ ...window.__cubical.metrics(), ...window.__cubical.presentation() })))) ;
+    await page.locator('#camera-study summary').click();
+    await page.locator('#orbit-piece').click();
+    await page.waitForTimeout(1600);
+    console.log('Theme study ' + theme + ':', JSON.stringify(await page.evaluate(() => ({ ...window.__cubical.metrics(), ...window.__cubical.presentation() }))));
+    await page.locator('#manual-camera').click();
+    await page.locator('#camera-study summary').click();
+  }
+  await page.getByRole('button', { name: 'Below', exact: true }).click(); await frame(page);
+  await page.screenshot({ path: 'docs/theme-luminous-below.png' });
+  await page.locator('#ambient-effects').uncheck();
+  await frame(page);
+  const renders = await page.evaluate(() => window.__cubical.metrics().renders);
+  await page.waitForTimeout(150);
+  expect(await page.evaluate(() => window.__cubical.metrics().renders)).toBe(renders);
+});
+
+test('dense opening keeps its legal field across themes and from below', async ({ page }) => {
+  await page.locator('#piece-navigator').selectOption('3');
+  const before = await snapshot(page), destinations = (await field(page)).cells;
+  await page.locator('#theme').selectOption('luminous'); await frame(page);
+  expect((await field(page)).cells).toEqual(destinations);
+  expect((await snapshot(page)).board).toEqual(before.board);
+  console.log('Luminous opening:', JSON.stringify(await page.evaluate(() => ({ ...window.__cubical.metrics(), ...window.__cubical.presentation() }))));
+  await page.screenshot({ path: 'docs/theme-luminous-opening.png' });
+  await page.getByRole('button', { name: 'Below', exact: true }).click(); await frame(page);
+  expect((await field(page)).cells).toEqual(destinations);
+  await expect(page.locator('.piece-label:visible')).toHaveCount(32);
+});
+
+test.describe('luminous tablet', () => {
+  test.use({ viewport: { width: 834, height: 1194 }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
+  test('touch cancels camera motion and still picks a themed capture', async ({ page }) => {
+    await page.locator('#game-panel-button').tap(); await load(page, 'spatial-study');
+    await page.locator('#inspect-panel-button').tap();
+    await page.locator('#theme').selectOption('luminous');
+    await page.locator('#camera-study summary').tap();
+    await page.locator('#orbit-piece').tap();
+    expect((await page.evaluate(() => window.__cubical.presentation())).director).toBe('inspection');
+    await page.locator('#inspect-panel-button').tap();
+    expect((await page.evaluate(() => window.__cubical.presentation())).director).toBe('manual');
+    await page.getByRole('button', { name: 'Isometric', exact: true }).tap();
+    await page.screenshot({ path: 'docs/theme-luminous-tablet.png' });
+    await clickCell(page, 4, 3, 5, true);
+    expect((await snapshot(page)).ply).toBe(0); expect((await field(page)).guideCount).toBe(1);
+    await clickCell(page, 4, 3, 5, true);
+    expect((await snapshot(page)).pieces[9].cell).toBeNull();
+  });
 });
