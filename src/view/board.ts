@@ -6,16 +6,19 @@ import type { Cell, GameState, Move, Piece, PieceType } from '../rules/types';
 import { PIECE_LETTERS } from '../rules/types';
 
 export type CameraPreset = 'iso' | 'front' | 'side' | 'top' | 'below';
+export type SelectionInput = 'pointer' | 'touch';
 export interface ViewOptions { trajectories: boolean; labels: boolean; plane: number | null; isolate: boolean }
 export interface BoardCallbacks {
-  select: (cell: Cell) => void;
+  select: (cell: Cell, input: SelectionInput) => void;
   hover: (cell: Cell | null) => void;
-  chooseDepth: (cells: Cell[], x: number, y: number) => void;
+  chooseDepth: (cells: Cell[], x: number, y: number, input: SelectionInput) => void;
   gesture: () => void;
+  navigate: () => void;
 }
 const BLUE = 0x79d4ff;
 const CORAL = 0xff8f89;
 const GOLD = 0xffd78c;
+const CAPTURE = 0xffa94d;
 const world = (cell: Cell): THREE.Vector3 => {
   const [x, y, z] = coordinates(cell);
   return new THREE.Vector3(x - 3.5, z - 3.5, y - 3.5);
@@ -32,6 +35,11 @@ export class BoardView {
   private readonly labels = new CSS2DRenderer();
   private readonly pieces = new Map<number, PieceView>();
   private readonly assists = new THREE.Group();
+  private readonly guide = new THREE.Group();
+  private readonly focusOutline: THREE.LineSegments;
+  private markers: THREE.InstancedMesh | null = null;
+  private fieldMoves: Move[] = [];
+  private hovered: Cell | null = null;
   private readonly picks = new THREE.Group();
   private readonly raycaster = new THREE.Raycaster();
   private readonly targetProxyGeometry = new THREE.SphereGeometry(0.23, 10, 8);
@@ -78,7 +86,7 @@ export class BoardView {
     this.scene.add(new THREE.AmbientLight(0xcdeaff, 2));
     const light = new THREE.DirectionalLight(0xffffff, 3);
     light.position.set(5, 9, -7);
-    this.scene.add(light, this.assists, this.picks, this.plane);
+    this.scene.add(light, this.assists, this.guide, this.picks, this.plane);
     this.shapes = {
       pawn: new THREE.IcosahedronGeometry(0.18, 1),
       rook: new THREE.BoxGeometry(0.36, 0.36, 0.36),
@@ -91,6 +99,10 @@ export class BoardView {
     this.hoverBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.78, 0.78, 0.78)), new THREE.LineBasicMaterial({ color: 0xf0f6ff, transparent: true, opacity: 0.7 }));
     this.selection.visible = this.hoverBox.visible = false;
     this.scene.add(this.selection, this.hoverBox);
+    this.focusOutline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.OctahedronGeometry(1)), new THREE.LineBasicMaterial({ color: GOLD, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false }));
+    this.focusOutline.visible = false;
+    this.focusOutline.renderOrder = 4;
+    this.scene.add(this.focusOutline);
     this.buildLattice();
     this.bindPointers();
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -198,6 +210,7 @@ export class BoardView {
 
   setSelection(pieceId: number | null, moves: Move[]): void {
     this.selected = pieceId; this.moves = moves;
+    this.hovered = null; this.hoverBox.visible = false;
     const piece = pieceId === null ? null : this.state?.pieces[pieceId];
     this.selection.visible = !!piece && piece.cell !== null;
     if (piece?.cell !== null && piece?.cell !== undefined) this.selection.position.copy(world(piece.cell));
@@ -231,62 +244,94 @@ export class BoardView {
 
   private buildAssists(): void {
     this.disposeObject(this.assists); this.assists.clear();
+    this.markers = null;
     for (const proxy of [...this.picks.children]) if (proxy.userData.destination) this.picks.remove(proxy);
     const unique = [...new Map(this.moves.map(m => [m.to, m])).values()].filter(m => this.cellVisible(m.to));
+    this.fieldMoves = unique;
     if (unique.length) {
       const geometry = new THREE.OctahedronGeometry(0.11);
-      const markers = new THREE.InstancedMesh(geometry, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.9 }), unique.length);
-      const matrix = new THREE.Matrix4();
-      unique.forEach((m, index) => {
-        matrix.makeTranslation(...world(m.to).toArray());
-        markers.setMatrixAt(index, matrix); markers.setColorAt(index, new THREE.Color(m.capturedId === null ? BLUE : GOLD));
+      // The complete field stays readable through occupied cells, including capture endpoints.
+      this.markers = new THREE.InstancedMesh(geometry, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.82, depthTest: false, depthWrite: false }), unique.length);
+      this.markers.renderOrder = 3;
+      for (const m of unique) {
         const proxy = new THREE.Mesh(this.targetProxyGeometry, this.invisible);
         proxy.position.copy(world(m.to)); proxy.userData.cell = m.to; proxy.userData.destination = true;
         this.picks.add(proxy);
-      });
-      this.assists.add(markers);
-      if (this.options.trajectories) this.drawTrajectories(unique);
+      }
+      this.assists.add(this.markers);
     }
+    this.updateFieldFocus();
     this.dirty = true;
   }
 
-  private drawTrajectories(moves: Move[]): void {
-    const segments = new Set<string>();
-    const points: number[] = [];
-    const jumpPoints: number[] = [];
-    for (const move of moves) {
-      if (move.kind === 'jump') {
-        const start = world(move.from), end = world(move.to);
-        const delta = end.clone().sub(start);
-        const elbow = start.clone();
-        const components = [Math.abs(delta.x), Math.abs(delta.y), Math.abs(delta.z)];
-        const axis = components.indexOf(Math.max(...components));
-        elbow.setComponent(axis, end.getComponent(axis));
-        jumpPoints.push(...start.toArray(), ...elbow.toArray(), ...elbow.toArray(), ...end.toArray());
-      } else {
-        let previous = move.from;
-        for (const next of move.path) {
-          const key = previous + ':' + next;
-          if (!segments.has(key)) { segments.add(key); points.push(...world(previous).toArray(), ...world(next).toArray()); }
-          previous = next;
-        }
-      }
+  private updateFieldFocus(): void {
+    const focused = this.fieldMoves.find(m => m.to === this.hovered);
+    const matrix = new THREE.Matrix4();
+    this.fieldMoves.forEach((move, index) => {
+      const active = move === focused;
+      const scale = (move.capturedId === null ? 1 : 1.15) * (active ? 1.65 : 1);
+      matrix.makeScale(scale, scale, scale).setPosition(world(move.to));
+      const color = new THREE.Color(move.capturedId === null ? GOLD : CAPTURE);
+      if (active) color.lerp(new THREE.Color(0xffffff), 0.25);
+      else if (focused) color.multiplyScalar(0.5);
+      this.markers!.setMatrixAt(index, matrix); this.markers!.setColorAt(index, color);
+    });
+    if (this.markers) {
+      this.markers.instanceMatrix.needsUpdate = true;
+      if (this.markers.instanceColor) this.markers.instanceColor.needsUpdate = true;
+      this.markers.computeBoundingSphere();
     }
-    if (points.length) {
-      const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
-      this.assists.add(new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: BLUE, transparent: true, opacity: 0.34, depthWrite: false })));
+    this.focusOutline.visible = !!focused;
+    if (focused) {
+      this.focusOutline.position.copy(world(focused.to));
+      this.focusOutline.scale.setScalar(focused.capturedId === null ? 0.24 : 0.39);
+      (this.focusOutline.material as THREE.LineBasicMaterial).color.set(focused.capturedId === null ? GOLD : CAPTURE);
     }
-    if (jumpPoints.length) {
-      const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.Float32BufferAttribute(jumpPoints, 3));
-      const lines = new THREE.LineSegments(geometry, new THREE.LineDashedMaterial({ color: BLUE, transparent: true, opacity: 0.4, dashSize: 0.10, gapSize: 0.10, depthWrite: false }));
-      lines.computeLineDistances(); this.assists.add(lines);
+    this.disposeObject(this.guide); this.guide.clear();
+    if (focused && this.options.trajectories) this.drawFocusedGuide(focused);
+    this.dirty = true;
+  }
+
+  private drawFocusedGuide(move: Move): void {
+    const start = world(move.from), end = world(move.to);
+    let points: THREE.Vector3[];
+    if (move.kind === 'jump') {
+      // A visual elbow explains the engine-provided jump, not an occupancy-tested route.
+      const delta = end.clone().sub(start);
+      const components = [Math.abs(delta.x), Math.abs(delta.y), Math.abs(delta.z)];
+      const elbow = start.clone().setComponent(components.indexOf(Math.max(...components)), end.getComponent(components.indexOf(Math.max(...components))));
+      points = [start, elbow, end];
+    } else {
+      points = [start, ...move.path.map(world)];
     }
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const style = { color: move.capturedId === null ? GOLD : CAPTURE, transparent: true, opacity: 0.85, depthWrite: false, depthTest: false };
+    const line = new THREE.Line(geometry, move.kind === 'jump' ? new THREE.LineDashedMaterial({ ...style, dashSize: 0.10, gapSize: 0.12 }) : new THREE.LineBasicMaterial(style));
+    if (move.kind === 'jump') line.computeLineDistances();
+    line.renderOrder = 2;
+    this.guide.add(line);
   }
 
   setHover(cell: Cell | null): void {
-    this.hoverBox.visible = cell !== null && this.cellVisible(cell);
+    if (cell === this.hovered) return;
+    this.hovered = cell;
+    this.hoverBox.visible = cell !== null && this.cellVisible(cell) && !this.moves.some(move => move.to === cell);
     if (cell !== null) this.hoverBox.position.copy(world(cell));
+    this.updateFieldFocus();
     this.dirty = true;
+  }
+
+  /** Read-only UI diagnostics: reflects the rendered field rather than predicting it. */
+  movementField(): { cells: Cell[]; focused: Cell | null; guideKind: Move['kind'] | null; guideCount: number; points: number[][]; dashed: boolean } {
+    const focused = this.fieldMoves.find(move => move.to === this.hovered);
+    const line = this.guide.children[0] as THREE.Line | undefined;
+    const position = line?.geometry.getAttribute('position');
+    return {
+      cells: this.fieldMoves.map(m => m.to), focused: focused?.to ?? null,
+      guideKind: line && focused ? focused.kind : null, guideCount: this.guide.children.length,
+      points: position ? Array.from({ length: position.count }, (_, i) => [position.getX(i), position.getY(i), position.getZ(i)]) : [],
+      dashed: line?.material instanceof THREE.LineDashedMaterial,
+    };
   }
 
   private hits(event: PointerEvent): Cell[] {
@@ -303,11 +348,12 @@ export class BoardView {
       if (this.pointers.size === 1) {
         this.gestureSuppressed = event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey;
         this.pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, dragged: false };
-      } else this.gestureSuppressed = true;
+      } else { this.gestureSuppressed = true; this.callbacks.navigate(); }
       this.callbacks.gesture();
     });
     canvas.addEventListener('pointermove', event => {
       if (this.pointer && Math.hypot(event.clientX - this.pointer.x, event.clientY - this.pointer.y) > 5) {
+        if (!this.pointer.dragged) this.callbacks.navigate();
         this.pointer.dragged = true;
       }
       if (!this.pointers.size) {
@@ -321,14 +367,16 @@ export class BoardView {
       this.pointers.delete(event.pointerId);
       if (tap && !this.isAnimating) {
         const hits = this.hits(event);
-        if (hits.length > 1) this.callbacks.chooseDepth(hits, event.clientX, event.clientY);
-        else if (hits.length === 1) this.callbacks.select(hits[0]);
-        else this.callbacks.select(-1);
+        const input = event.pointerType === 'touch' ? 'touch' : 'pointer';
+        if (hits.length > 1) this.callbacks.chooseDepth(hits, event.clientX, event.clientY, input);
+        else if (hits.length === 1) this.callbacks.select(hits[0], input);
+        else this.callbacks.select(-1, input);
       }
       if (!this.pointers.size) this.pointer = null;
     });
     canvas.addEventListener('pointercancel', event => { this.pointers.delete(event.pointerId); this.gestureSuppressed = true; this.pointer = null; });
-    canvas.addEventListener('pointerleave', () => { if (!this.pointers.size) this.callbacks.hover(null); });
+    canvas.addEventListener('pointerleave', event => { if (!this.pointers.size && event.pointerType !== 'touch') this.callbacks.hover(null); });
+    canvas.addEventListener('wheel', () => this.callbacks.navigate(), { passive: true });
     canvas.addEventListener('contextmenu', event => event.preventDefault());
   }
 
@@ -391,7 +439,7 @@ export class BoardView {
 
   private disposeObject(root: THREE.Object3D, keepShapes = false): void {
     root.traverse(object => {
-      if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
+      if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
         if (!keepShapes || !Object.values(this.shapes).includes(object.geometry)) object.geometry.dispose();
         const materials = Array.isArray(object.material) ? object.material : [object.material];
         for (const material of materials) material.dispose();

@@ -6,9 +6,11 @@ interface Diagnostics {
   project(cell: number): { x: number; y: number };
   metrics(): { drawCalls: number; triangles: number; lastRenderMs: number; renders: number };
   camera(): number[];
+  movementField(): { cells: number[]; focused: number | null; guideKind: string | null; guideCount: number; points: number[][]; dashed: boolean; inspectedCell: number | null };
 }
 declare global { interface Window { __cubical: Diagnostics } }
 const cell = (x: number, y: number, z: number) => x + 8 * y + 64 * z;
+const field = (page: Page) => page.evaluate(() => window.__cubical.movementField());
 const snapshot = (page: Page) => page.evaluate(() => window.__cubical.snapshot());
 const runtimeErrors = new WeakMap<Page, string[]>();
 const frame = (page: Page) => page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
@@ -19,7 +21,8 @@ async function clickCell(page: Page, x: number, y: number, z: number, touch = fa
   if (touch) await page.touchscreen.tap(position.x, position.y);
   else await page.mouse.click(position.x, position.y);
   if (await page.locator('#depth-chooser').isVisible()) {
-    await page.locator('#depth-options button').filter({ hasText: '(' + [x, y, z].join(', ') + ')' }).click();
+    const choice = page.locator('#depth-options button').filter({ hasText: '(' + [x, y, z].join(', ') + ')' });
+    if (touch) await choice.tap(); else await choice.click();
   }
 }
 async function load(page: Page, setup: string, profile = 'prototype-1') {
@@ -146,9 +149,87 @@ test('overlapping front-view pieces offer an explicit depth choice', async ({ pa
 
 test('captures desktop study screenshot and render metrics', async ({ page }) => {
   await load(page, 'spatial-study');
-  await page.screenshot({ path: 'docs/prototype-1-desktop.png' });
+  await page.screenshot({ path: 'docs/spatial-field-desktop.png' });
   console.log('Desktop render metrics:', JSON.stringify(await page.evaluate(() => window.__cubical.metrics())));
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+});
+
+test('knight constellation reveals one dashed elbow on canvas hover', async ({ page }) => {
+  await load(page, 'spatial-study');
+  const before = await snapshot(page);
+  expect((await field(page)).cells).toHaveLength(24);
+  expect((await field(page)).guideCount).toBe(0);
+  const target = cell(4, 3, 5);
+  const point = await page.evaluate(c => window.__cubical.project(c), target);
+  await page.mouse.move(point.x, point.y);
+  await expect.poll(async () => (await field(page)).focused).toBe(target);
+  const inspected = await field(page);
+  expect(inspected.cells).toHaveLength(24);
+  expect(inspected.guideCount).toBe(1);
+  expect(inspected.dashed).toBe(true);
+  expect(inspected.points).toEqual([[-0.5, -0.5, -0.5], [-0.5, 1.5, -0.5], [0.5, 1.5, -0.5]]);
+  await expect(page.locator('#move-detail')).toContainText('Capture Black pawn');
+  await frame(page);
+  await page.screenshot({ path: 'docs/spatial-field-knight-focus.png' });
+  await page.mouse.move(10, 10);
+  expect((await field(page)).guideCount).toBe(0);
+  expect((await field(page)).cells).toEqual(inspected.cells);
+  expect((await snapshot(page)).board).toEqual(before.board);
+  expect((await snapshot(page)).history).toEqual(before.history);
+  await page.locator('#trajectories').uncheck();
+  await page.mouse.move(point.x, point.y);
+  expect((await field(page)).focused).toBe(target);
+  expect((await field(page)).guideCount).toBe(0);
+});
+
+test('keyboard focus explains a capture and Enter commits it', async ({ page }) => {
+  await load(page, 'spatial-study');
+  const destination = page.getByRole('button', { name: 'Move to (4, 3, 5)', exact: true });
+  await destination.focus();
+  expect((await field(page)).guideCount).toBe(1);
+  expect((await snapshot(page)).ply).toBe(0);
+  await expect(destination).toHaveClass(/inspected/);
+  await page.locator('#piece-navigator').focus();
+  expect((await field(page)).guideCount).toBe(0);
+  await destination.focus();
+  await destination.press('Enter');
+  expect((await snapshot(page)).pieces[9].cell).toBeNull();
+  expect((await field(page)).guideCount).toBe(0);
+  await page.locator('#undo').click();
+  expect((await field(page)).cells).toHaveLength(0);
+});
+
+test('slider and step guides use exactly the engine path; changing levels clears inspection', async ({ page }) => {
+  await load(page, 'spatial-study');
+  for (const [id, destination] of [['3', '(1, 2, 4)'], ['4', '(6, 2, 3)'], ['5', '(2, 4, 3)'], ['0', '(1, 0, 0)']]) {
+    await page.locator('#piece-navigator').selectOption(id);
+    expect((await field(page)).guideCount).toBe(0);
+    const button = page.getByRole('button', { name: 'Move to ' + destination, exact: true });
+    await button.focus();
+    const rendered = await field(page);
+    const move = (await snapshot(page)).moves.find(m => m.to === rendered.focused)!;
+    const world = (c: number) => [c % 8 - 3.5, Math.floor(c / 64) - 3.5, Math.floor(c / 8) % 8 - 3.5];
+    expect(rendered.guideCount).toBe(1);
+    expect(rendered.dashed).toBe(false);
+    expect(rendered.points).toEqual([move.from, ...move.path].map(world));
+    expect((await snapshot(page)).ply).toBe(0);
+  }
+  await page.locator('#plane').selectOption('0');
+  expect((await field(page)).guideCount).toBe(0);
+});
+
+test('check and promotion-dependent consequences appear only on inspection', async ({ page }) => {
+  await page.locator('#piece-navigator').selectOption('3');
+  await page.getByRole('button', { name: 'Move to (3, 7, 6)', exact: true }).focus();
+  await expect(page.locator('#move-detail')).toContainText('Gives check.');
+  expect((await snapshot(page)).status).toEqual({ kind: 'playing', check: false });
+  expect((await snapshot(page)).ply).toBe(0);
+  await load(page, 'promotion');
+  expect((await field(page)).guideCount).toBe(0);
+  await page.getByRole('button', { name: 'Move to (3, 3, 7)', exact: true }).focus();
+  await expect(page.locator('#move-detail')).toContainText('Check depends on the promotion choice.');
+  await expect(page.locator('#promotion-dialog')).not.toBeVisible();
+  expect((await snapshot(page)).pieces[2].type).toBe('pawn');
 });
 
 test.describe('tablet', () => {
@@ -157,6 +238,10 @@ test.describe('tablet', () => {
     await page.locator('#game-panel-button').click();
     await load(page, 'spatial-study');
     await page.locator('#game-panel-button').click();
+    await clickCell(page, 4, 3, 5, true);
+    expect((await snapshot(page)).ply).toBe(0);
+    expect((await field(page)).guideCount).toBe(1);
+    await expect(page.locator('#instruction')).toContainText('tap again');
     await clickCell(page, 4, 3, 5, true);
     await expect.poll(async () => (await snapshot(page)).ply).toBe(1);
     const before = await snapshot(page);
@@ -167,11 +252,85 @@ test.describe('tablet', () => {
     await frame(page);
     expect((await snapshot(page)).board).toEqual(before.board);
     await page.getByRole('button', { name: 'Isometric', exact: true }).click(); await frame(page);
-    await page.screenshot({ path: 'docs/prototype-1-tablet.png' });
+    await page.screenshot({ path: 'docs/spatial-field-tablet.png' });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight)).toBe(true);
     await page.setViewportSize({ width: 1194, height: 834 });
     await page.getByRole('button', { name: 'Isometric', exact: true }).click(); await frame(page);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight)).toBe(true);
-    await page.screenshot({ path: 'docs/prototype-1-tablet-landscape.png' });
+    expect(await page.evaluate(() => document.querySelector('.selected-section')!.getBoundingClientRect().bottom <= document.querySelector('#inspect-panel .panel-footnote')!.getBoundingClientRect().top + 1)).toBe(true);
+    await page.screenshot({ path: 'docs/spatial-field-tablet-landscape.png' });
   });
+});
+
+test('autosave restores capture, profile, turn and history, with undo surviving reload', async ({ page }) => {
+  await load(page, 'spatial-study', 'prototype-1-three');
+  const before = await snapshot(page);
+  await page.getByRole('button', { name: 'Move to (4, 3, 5)', exact: true }).click();
+  const moved = await snapshot(page);
+  await expect(page.locator('#save-status')).toContainText('Saved automatically');
+  await page.reload();
+  await expect(page.locator('#turn-label')).toHaveText('Black to move');
+  expect((await snapshot(page)).board).toEqual(moved.board);
+  expect((await snapshot(page)).history).toEqual(moved.history);
+  await expect(page.locator('#profile')).toHaveValue('prototype-1-three');
+  await expect(page.locator('#setup')).toHaveValue('spatial-study');
+  await page.locator('#undo').click();
+  await page.reload();
+  expect((await snapshot(page)).pieces).toEqual(before.pieces);
+  expect((await snapshot(page)).ply).toBe(0);
+  await expect(page.locator('#undo')).toBeDisabled();
+});
+
+test('reset requires confirmation, cancel and Escape preserve the save, confirmed reset persists', async ({ page }) => {
+  await load(page, 'spatial-study');
+  await page.getByRole('button', { name: 'Move to (4, 3, 5)', exact: true }).click();
+  const before = await snapshot(page);
+  await page.locator('#reset-game').click();
+  await expect(page.locator('#reset-dialog')).toBeVisible();
+  await expect(page.locator('#cancel-reset')).toBeFocused();
+  await page.locator('#cancel-reset').click();
+  expect((await snapshot(page)).board).toEqual(before.board);
+  await page.locator('#reset-game').click();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#reset-dialog')).not.toBeVisible();
+  await page.reload();
+  expect((await snapshot(page)).board).toEqual(before.board);
+  await page.locator('#reset-game').click();
+  await page.locator('#confirm-reset').click();
+  await page.reload();
+  expect((await snapshot(page)).ply).toBe(0);
+  expect((await snapshot(page)).pieces[9].cell).toBe(cell(4, 3, 5));
+  await expect(page.locator('#setup')).toHaveValue('spatial-study');
+  await expect(page.locator('#undo')).toBeDisabled();
+});
+
+test('promotion autosave restores chosen type and undo restores captured piece', async ({ page }) => {
+  await load(page, 'promotion');
+  await page.getByRole('button', { name: 'Move to (4, 3, 7)', exact: true }).click();
+  await page.locator('[data-promote="knight"]').click();
+  await page.reload();
+  expect((await snapshot(page)).pieces[2].type).toBe('knight');
+  expect((await snapshot(page)).pieces[3].cell).toBeNull();
+  await page.locator('#undo').click();
+  expect((await snapshot(page)).pieces[2].type).toBe('pawn');
+  expect((await snapshot(page)).pieces[3].cell).toBe(cell(4, 3, 7));
+});
+
+test('unreadable save is reported and preserved until explicit reset', async ({ page }) => {
+  await page.evaluate(() => localStorage.setItem('cubical-chess.active-game', '{broken'));
+  await page.reload();
+  await expect(page.locator('#save-status')).toContainText('unavailable or incompatible');
+  expect(await page.evaluate(() => localStorage.getItem('cubical-chess.active-game'))).toBe('{broken');
+  expect((await snapshot(page)).pieces).toHaveLength(32);
+  await page.locator('#reset-game').click();
+  await page.locator('#confirm-reset').click();
+  await expect(page.locator('#save-status')).toContainText('Saved automatically');
+});
+
+test('blocked storage keeps play usable and reports unsaved changes', async ({ page }) => {
+  await page.evaluate(() => { Storage.prototype.setItem = () => { throw new DOMException('Full', 'QuotaExceededError'); }; });
+  await load(page, 'spatial-study');
+  await page.getByRole('button', { name: 'Move to (4, 3, 5)', exact: true }).click();
+  expect((await snapshot(page)).ply).toBe(1);
+  await expect(page.locator('#save-status')).toContainText('Could not save');
 });

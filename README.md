@@ -26,11 +26,13 @@ npm run test:browser
 - Two local players; full opposing outer-plane setup or three small study positions.
 - All six piece geometries, capture, king safety, promotion, game status, repetition, no-progress draw, and exact undo.
 - Four-direction pawns (`prototype-1`) and a three-direction comparison. Profile changes take effect when loading a position.
-- Orbit, pan, zoom, front/side/above/below/isometric presets, legal destinations, slider guides, and dashed knight jump guides.
+- Orbit, pan, zoom, front/side/above/below/isometric presets, complete legal-destination constellations, and one inspected path at a time.
 - Depth chooser for overlapping cells, piece navigator, accessible destination buttons, and optional level isolation.
 - A single-screen desktop/tablet layout with temporary spatial symbols and letter labels.
 
-Select a piece and then an illuminated destination. Drag to orbit, scroll or pinch to zoom, and right-drag or use two fingers to pan. Gold destinations indicate captures. If multiple cells overlap under the pointer, choose the intended coordinate from the depth chooser. The piece navigator and destination buttons provide an alternative to picking in the cube.
+Select a piece to see its full movement field. Hover a destination or focus its button to emphasize that marker and inspect one path: a continuous ray for sliders, a dashed elbow for Knights. The inspector explains displacement, capture and prospective check without changing the game. Gold markers indicate legal destinations; larger amber markers indicate captures. Click or press Enter to move. On touchscreens, tap a destination to inspect it, then tap it again to commit.
+
+Drag to orbit, scroll or pinch to zoom, and right-drag or use two fingers to pan. If multiple cells overlap under the pointer, choose the intended coordinate from the depth chooser. The piece navigator and destination buttons provide an alternative to picking in the cube. Level isolation is optional; the full cube remains the default.
 
 The **Spatial study** starts with a central knight and 24 legal destinations. **King safety** demonstrates a rook pinned to its king along a body diagonal. **Promotion study** provides both a quiet promotion and a capturing promotion. Loading a position resets the current game.
 
@@ -44,6 +46,12 @@ The renderer draws on changes and during camera/move animation. Piece geometry i
 
 ## Current scope
 
-This is the functional vertical slice. The move log lasts for the current page session; reload resets it. LocalStorage archives/resume, final multidirectional piece designs, a Web Worker computer opponent, threat/ghost overlays, and online play remain later stages in the [approved plan](THREE_DIMENSIONAL_CHESS_PLAN.md).
+The active game saves automatically in browser localStorage after each move, promotion, undo, position load and reset. Reload restores the setup, pawn profile, board, turn, move history and undo capability. Use the same browser and site address (including port) to resume that save. One active game is retained; camera position and hover previews are not saved.
+
+**Reset game** asks for confirmation, then restarts the currently loaded position with its current pawn profile and clears its move history. **Load position** also asks before replacing a game with played moves. Cancel or Escape keeps the game. The save status below these controls reports storage failures; play can continue in memory if storage is unavailable.
+
+Records carry schema and rules versions and are validated by replay through the rules engine. An unreadable or incompatible save is reported and left intact until the next game change. Browser save archives, final multidirectional piece designs, a Web Worker computer opponent, threat/ghost overlays, and online play remain later stages in the [approved plan](THREE_DIMENSIONAL_CHESS_PLAN.md).
 
 See the [slice report](docs/PROTOTYPE_1_RESULTS.md) for verification, measurements, and issues to carry into the next stage.
+
+The [spatial UI refinement report](docs/SPATIAL_UI_REFINEMENTS.md) records the subsequent constellation, focus and touch improvements.

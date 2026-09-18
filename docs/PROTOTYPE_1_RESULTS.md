@@ -2,6 +2,8 @@
 
 18 September 2026. The functional slice is implemented and available through `npm run dev`. Automated verification passed. This is the implementation checkpoint before final piece design, saved-game archives, AI, and optical polish.
 
+Subsequent movement-field and hover/focus changes are documented in the [Stage 3 spatial UI refinement report](SPATIAL_UI_REFINEMENTS.md); the measurements and screenshots below describe the original slice.
+
 ## What is playable
 
 The browser presents one 8 × 8 × 8 cube with the approved 16-piece White army on Z = 0 and Black army on Z = 7. Players can select pieces, inspect legal destinations, move and capture, choose promotions, alternate turns, and undo. The rules core handles check, checkmate, stalemate, repetition, kings-only draws, and the experimental 100-ply no-progress rule.
