@@ -6,7 +6,7 @@ interface Diagnostics {
   project(cell: number): { x: number; y: number };
   metrics(): { drawCalls: number; triangles: number; lastRenderMs: number; renders: number };
   camera(): number[];
-  presentation(): { optical: { refraction: boolean; spectral: boolean; caustics: boolean; inclusions: boolean } | null; theme: string; director: string; effects: boolean; geometries: number; textures: number; samples: number; medianSubmitMs: number; p95SubmitMs: number; target: number[] };
+  presentation(): { lattice: { mode: string; localCells: number[]; localSegments: number }; optical: { refraction: boolean; spectral: boolean; caustics: boolean; inclusions: boolean } | null; theme: string; director: string; effects: boolean; geometries: number; textures: number; samples: number; medianSubmitMs: number; p95SubmitMs: number; target: number[] };
   movementField(): { cells: number[]; focused: number | null; guideKind: string | null; guideCount: number; points: number[][]; dashed: boolean; inspectedCell: number | null };
 }
 declare global { interface Window { __cubical: Diagnostics } }
@@ -406,7 +406,7 @@ test('records theme study screenshots and comparable camera-motion metrics', asy
   for (const theme of ['diagnostic', 'luminous']) {
     await page.locator('#theme').selectOption(theme);
     await page.getByRole('button', { name: 'Isometric', exact: true }).click(); await frame(page);
-    await page.screenshot({ path: 'docs/theme-' + theme + '-study.png' });
+    await page.screenshot({ path: 'docs/electric-regression-' + theme + '-study.png' });
     console.log('Static theme ' + theme + ':', JSON.stringify(await page.evaluate(() => ({ ...window.__cubical.metrics(), ...window.__cubical.presentation() })))) ;
     await page.locator('#camera-study summary').click();
     await page.locator('#orbit-piece').click();
@@ -416,7 +416,7 @@ test('records theme study screenshots and comparable camera-motion metrics', asy
     await page.locator('#camera-study summary').click();
   }
   await page.getByRole('button', { name: 'Below', exact: true }).click(); await frame(page);
-  await page.screenshot({ path: 'docs/theme-luminous-below.png' });
+  await page.screenshot({ path: 'docs/electric-regression-luminous-below.png' });
   await page.locator('#ambient-effects').uncheck();
   await frame(page);
   const renders = await page.evaluate(() => window.__cubical.metrics().renders);
@@ -431,7 +431,7 @@ test('dense opening keeps its legal field across themes and from below', async (
   expect((await field(page)).cells).toEqual(destinations);
   expect((await snapshot(page)).board).toEqual(before.board);
   console.log('Luminous opening:', JSON.stringify(await page.evaluate(() => ({ ...window.__cubical.metrics(), ...window.__cubical.presentation() }))));
-  await page.screenshot({ path: 'docs/theme-luminous-opening.png' });
+  await page.screenshot({ path: 'docs/electric-regression-luminous-opening.png' });
   await page.getByRole('button', { name: 'Below', exact: true }).click(); await frame(page);
   expect((await field(page)).cells).toEqual(destinations);
   await expect(page.locator('.piece-label:visible')).toHaveCount(32);
@@ -449,7 +449,7 @@ test.describe('luminous tablet', () => {
     await page.locator('#inspect-panel-button').tap();
     expect((await page.evaluate(() => window.__cubical.presentation())).director).toBe('manual');
     await page.getByRole('button', { name: 'Isometric', exact: true }).tap();
-    await page.screenshot({ path: 'docs/theme-luminous-tablet.png' });
+    await page.screenshot({ path: 'docs/electric-regression-luminous-tablet.png' });
     await clickCell(page, 4, 3, 5, true);
     expect((await snapshot(page)).ply).toBe(0); expect((await field(page)).guideCount).toBe(1);
     await clickCell(page, 4, 3, 5, true);

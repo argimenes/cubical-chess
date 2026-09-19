@@ -46,13 +46,16 @@ The default renderer draws on changes and during camera/move animation. Destinat
 
 ## Theme and camera study
 
-**Diagnostic · clean lattice** remains the default. Choose **Luminous · visual study** under View & guidance to try darker surroundings, spatial piece details, surface glints and sparse background scintillation. Gold legal destinations retain their common styling. Turn off **Ambient animation** for static rendering.
+**Diagnostic · clean lattice** remains the default. Choose **Luminous · electric space** for sapphire/cyan and ruby/red faceted pieces with localized electric light and scintillation against a near-black, sparse starfield. Gold legal destinations and amber captures keep their common styling.
 
-Open **Camera study** for **Focus selected** and **Inspect orbit**. Pointer down, wheel or keyboard input immediately returns control to you. Reduced-motion preferences are respected. Theme and camera changes do not alter the game or its save; themes are not persisted yet.
+**Lattice display** is independent of theme: **Full** retains the analytical grid, **Structural** reduces it to structural plane cues, and **Adaptive** strengthens local cell context around selected pieces, legal destinations and inspected paths. Switching themes preserves that setting. Turn off **Ambient animation** for static rendering.
 
-**Crystal · optical study** now opens with an intentionally exaggerated **intact cut cube**: connected outer bevels, internal facet planes, saturated prism bands, travelling caustics and angle-dependent glints. Three switches independently control **Cut facets / reflections**, **Spectral / prismatic** and **Caustics / scintillation**. Enable **Cubical inclusions** to compare an 8×8×8 internal structure with the broad internal facets. Orbit to catch the light, or turn off Ambient animation to compare stills. Sparse geometry replaces the former full-screen optical pass; pieces stay unwarped and gold destinations gain dark contrast backings. See the [exaggerated Crystal study](docs/CRYSTAL_EXAGGERATED_STUDY.md) for screenshots, performance and remaining legibility limits.
+Open **Camera study** for **Focus selected**, **Inspect orbit** or **Close inspection**. The close orbit can enter the volume to inspect a piece. Pointer down, wheel or keyboard input immediately returns control to you. Reduced-motion preferences are respected. Theme, lattice and camera changes do not alter the game or its save; these view settings are not persisted yet.
 
-See the [architecture spike report](docs/THEME_CAMERA_SPIKE.md) for all four theme directions and the replay/director design. Deep Space, Aquarium, cinematic replay and attract mode remain design directions. Diagnostic and Luminous retain their approved appearance.
+The [Luminous electric study report](docs/LUMINOUS_ELECTRIC_STUDY.md) contains seven-view piece-recognition sheets, lattice comparisons, performance and remaining limitations. This is a bounded visual study, not final art polish.
+
+**Crystal · optical study** remains available for reference, including its independent effects and optional cubical inclusions. Further work on a strongly crystalline playing volume has stopped following human review. See the [Crystal report](docs/CRYSTAL_EXAGGERATED_STUDY.md) for that experiment's results. Future cinematic replay, attract mode and other environments remain later work.
+
 
 ## Current scope
 

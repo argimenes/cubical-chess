@@ -96,7 +96,7 @@ test('records exaggerated and separate optical treatments at fixed poses and war
     await page.getByRole('button', { name: 'Isometric', exact: true }).click(); await frame(page);
     const name = effect ?? 'off';
     results[name] = { static: { ...await presentation(page), ...await page.evaluate(() => window.__cubical.metrics()) } };
-    await page.screenshot({ path: 'docs/crystal-bold-' + name + '.png' });
+    await page.screenshot({ path: test.info().outputPath('crystal-' + name + '.png') });
     await page.locator('#camera-study summary').click();
     await page.locator('#orbit-piece').click();
     const intervals = await page.evaluate(async () => {
@@ -110,16 +110,16 @@ test('records exaggerated and separate optical treatments at fixed poses and war
     Object.assign(results[name] as object, { camera: await presentation(page), frameIntervalsMs: intervals });
     await page.locator('#manual-camera').click(); await page.locator('#camera-study summary').click();
   }
-  await writeFile('docs/crystal-bold-measurements.json', JSON.stringify(results, null, 2) + '\n');
+  await writeFile(test.info().outputPath('crystal-measurements.json'), JSON.stringify(results, null, 2) + '\n');
   console.log('Crystal measurements:', JSON.stringify(results));
   await page.getByRole('button', { name: 'Below', exact: true }).click(); await frame(page);
-  await page.screenshot({ path: 'docs/crystal-bold-combined-below.png' });
+  await page.screenshot({ path: test.info().outputPath('crystal-combined-below.png') });
   await setup(page, 'outer-planes');
   await page.locator('#piece-navigator').selectOption('3');
   for (const effect of [...effects, 'combined', 'inclusion-study'] as const) {
     await solo(page, effect);
     await page.getByRole('button', { name: 'Isometric', exact: true }).click(); await frame(page);
-    await page.screenshot({ path: 'docs/crystal-bold-' + effect + '-opening.png' });
+    await page.screenshot({ path: test.info().outputPath('crystal-' + effect + '-opening.png') });
     await expect(page.locator('.piece-label:visible')).toHaveCount(32);
     expect((await page.evaluate(() => window.__cubical.movementField())).cells).toHaveLength(33);
   }
@@ -132,7 +132,7 @@ test.describe('Crystal tablet', () => {
     await page.locator('#inspect-panel-button').tap();
     await page.locator('#theme').selectOption('crystal'); expect((await presentation(page)).optical).toEqual({ refraction: true, spectral: true, caustics: true, inclusions: false });
     await page.locator('#inspect-panel-button').tap();
-    await page.screenshot({ path: 'docs/crystal-bold-tablet.png' });
+    await page.screenshot({ path: test.info().outputPath('crystal-tablet.png') });
     await canvasCell(page, target, true);
     expect((await snapshot(page)).ply).toBe(0);
     expect((await page.evaluate(() => window.__cubical.movementField())).guideCount).toBe(1);

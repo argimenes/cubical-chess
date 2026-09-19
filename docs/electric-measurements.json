@@ -1,0 +1,514 @@
+{
+  "diagnostic-full": {
+    "fixed": {
+      "theme": "diagnostic",
+      "lattice": {
+        "mode": "full",
+        "localCells": [],
+        "localSegments": 0
+      },
+      "optical": null,
+      "director": "manual",
+      "effects": false,
+      "geometries": 34,
+      "textures": 1,
+      "samples": 2,
+      "medianSubmitMs": 0.6999999955296516,
+      "p95SubmitMs": 0.6999999955296516,
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "drawCalls": 32,
+      "triangles": 1440,
+      "lastRenderMs": 0.5,
+      "renders": 6
+    },
+    "camera": {
+      "theme": "diagnostic",
+      "lattice": {
+        "mode": "full",
+        "localCells": [],
+        "localSegments": 0
+      },
+      "optical": null,
+      "director": "inspection",
+      "effects": false,
+      "geometries": 34,
+      "textures": 1,
+      "samples": 26,
+      "medianSubmitMs": 0.5,
+      "p95SubmitMs": 0.6000000014901161,
+      "target": [
+        -0.5,
+        -0.5,
+        -0.5
+      ]
+    },
+    "frameIntervalsMs": [
+      33.29999999999973,
+      49.899999999999636,
+      49.899999999999636,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50.100000000000364,
+      50.100000000000364,
+      66.59999999999991,
+      66.70000000000027
+    ]
+  },
+  "diagnostic-structural": {
+    "fixed": {
+      "theme": "diagnostic",
+      "lattice": {
+        "mode": "structural",
+        "localCells": [],
+        "localSegments": 0
+      },
+      "optical": null,
+      "director": "manual",
+      "effects": false,
+      "geometries": 35,
+      "textures": 1,
+      "samples": 2,
+      "medianSubmitMs": 0.5,
+      "p95SubmitMs": 0.5,
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "drawCalls": 30,
+      "triangles": 1440,
+      "lastRenderMs": 0.29999999701976776,
+      "renders": 34
+    },
+    "camera": {
+      "theme": "diagnostic",
+      "lattice": {
+        "mode": "structural",
+        "localCells": [],
+        "localSegments": 0
+      },
+      "optical": null,
+      "director": "inspection",
+      "effects": false,
+      "geometries": 35,
+      "textures": 1,
+      "samples": 26,
+      "medianSubmitMs": 0.3999999985098839,
+      "p95SubmitMs": 0.5,
+      "target": [
+        -0.5,
+        -0.5,
+        -0.5
+      ]
+    },
+    "frameIntervalsMs": [
+      33.30000000000018,
+      33.30000000000018,
+      33.399999999999636,
+      49.900000000000546,
+      49.900000000000546,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50.099999999999454
+    ]
+  },
+  "diagnostic-adaptive": {
+    "fixed": {
+      "theme": "diagnostic",
+      "lattice": {
+        "mode": "adaptive",
+        "localCells": [
+          209,
+          225,
+          213,
+          229,
+          153,
+          281,
+          157,
+          285,
+          202,
+          204,
+          234,
+          236,
+          139,
+          267,
+          171,
+          299,
+          90,
+          92,
+          346,
+          348,
+          83,
+          99,
+          339,
+          355,
+          219
+        ],
+        "localSegments": 600
+      },
+      "optical": null,
+      "director": "manual",
+      "effects": false,
+      "geometries": 36,
+      "textures": 1,
+      "samples": 2,
+      "medianSubmitMs": 0.5,
+      "p95SubmitMs": 0.5,
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "drawCalls": 33,
+      "triangles": 1440,
+      "lastRenderMs": 0.3999999985098839,
+      "renders": 62
+    },
+    "camera": {
+      "theme": "diagnostic",
+      "lattice": {
+        "mode": "adaptive",
+        "localCells": [
+          209,
+          225,
+          213,
+          229,
+          153,
+          281,
+          157,
+          285,
+          202,
+          204,
+          234,
+          236,
+          139,
+          267,
+          171,
+          299,
+          90,
+          92,
+          346,
+          348,
+          83,
+          99,
+          339,
+          355,
+          219
+        ],
+        "localSegments": 600
+      },
+      "optical": null,
+      "director": "inspection",
+      "effects": false,
+      "geometries": 36,
+      "textures": 1,
+      "samples": 26,
+      "medianSubmitMs": 0.3999999985098839,
+      "p95SubmitMs": 0.5,
+      "target": [
+        -0.5,
+        -0.5,
+        -0.5
+      ]
+    },
+    "frameIntervalsMs": [
+      49.899999999999636,
+      49.899999999999636,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50.099999999999454,
+      50.100000000000364,
+      50.100000000000364,
+      50.100000000000364,
+      66.5,
+      66.59999999999945
+    ]
+  },
+  "luminous-full": {
+    "fixed": {
+      "theme": "luminous",
+      "lattice": {
+        "mode": "full",
+        "localCells": [],
+        "localSegments": 0
+      },
+      "optical": null,
+      "director": "manual",
+      "effects": false,
+      "geometries": 40,
+      "textures": 1,
+      "samples": 2,
+      "medianSubmitMs": 129.80000000447035,
+      "p95SubmitMs": 129.80000000447035,
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "drawCalls": 37,
+      "triangles": 2072,
+      "lastRenderMs": 0.6000000014901161,
+      "renders": 90
+    },
+    "camera": {
+      "theme": "luminous",
+      "lattice": {
+        "mode": "full",
+        "localCells": [],
+        "localSegments": 0
+      },
+      "optical": null,
+      "director": "inspection",
+      "effects": false,
+      "geometries": 40,
+      "textures": 1,
+      "samples": 26,
+      "medianSubmitMs": 0.5,
+      "p95SubmitMs": 0.6000000014901161,
+      "target": [
+        -0.5,
+        -0.5,
+        -0.5
+      ]
+    },
+    "frameIntervalsMs": [
+      49.899999999999636,
+      49.899999999999636,
+      49.899999999999636,
+      49.899999999999636,
+      49.899999999999636,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50.099999999999454,
+      50.100000000000364,
+      50.100000000000364,
+      50.100000000000364,
+      50.100000000000364
+    ]
+  },
+  "luminous-structural": {
+    "fixed": {
+      "theme": "luminous",
+      "lattice": {
+        "mode": "structural",
+        "localCells": [],
+        "localSegments": 0
+      },
+      "optical": null,
+      "director": "manual",
+      "effects": false,
+      "geometries": 40,
+      "textures": 1,
+      "samples": 2,
+      "medianSubmitMs": 0.3999999985098839,
+      "p95SubmitMs": 0.3999999985098839,
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "drawCalls": 35,
+      "triangles": 2072,
+      "lastRenderMs": 0.3999999985098839,
+      "renders": 118
+    },
+    "camera": {
+      "theme": "luminous",
+      "lattice": {
+        "mode": "structural",
+        "localCells": [],
+        "localSegments": 0
+      },
+      "optical": null,
+      "director": "inspection",
+      "effects": false,
+      "geometries": 40,
+      "textures": 1,
+      "samples": 26,
+      "medianSubmitMs": 0.3999999985098839,
+      "p95SubmitMs": 0.5,
+      "target": [
+        -0.5,
+        -0.5,
+        -0.5
+      ]
+    },
+    "frameIntervalsMs": [
+      33.20000000000073,
+      33.29999999999927,
+      33.29999999999927,
+      33.399999999999636,
+      49.899999999999636,
+      49.899999999999636,
+      49.900000000001455,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50.099999999998545,
+      50.100000000000364,
+      50.100000000000364,
+      50.100000000000364,
+      83.30000000000109
+    ]
+  },
+  "luminous-adaptive": {
+    "fixed": {
+      "theme": "luminous",
+      "lattice": {
+        "mode": "adaptive",
+        "localCells": [
+          209,
+          225,
+          213,
+          229,
+          153,
+          281,
+          157,
+          285,
+          202,
+          204,
+          234,
+          236,
+          139,
+          267,
+          171,
+          299,
+          90,
+          92,
+          346,
+          348,
+          83,
+          99,
+          339,
+          355,
+          219
+        ],
+        "localSegments": 600
+      },
+      "optical": null,
+      "director": "manual",
+      "effects": false,
+      "geometries": 41,
+      "textures": 1,
+      "samples": 2,
+      "medianSubmitMs": 0.5,
+      "p95SubmitMs": 0.5,
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "drawCalls": 38,
+      "triangles": 2072,
+      "lastRenderMs": 0.5,
+      "renders": 146
+    },
+    "camera": {
+      "theme": "luminous",
+      "lattice": {
+        "mode": "adaptive",
+        "localCells": [
+          209,
+          225,
+          213,
+          229,
+          153,
+          281,
+          157,
+          285,
+          202,
+          204,
+          234,
+          236,
+          139,
+          267,
+          171,
+          299,
+          90,
+          92,
+          346,
+          348,
+          83,
+          99,
+          339,
+          355,
+          219
+        ],
+        "localSegments": 600
+      },
+      "optical": null,
+      "director": "inspection",
+      "effects": false,
+      "geometries": 41,
+      "textures": 1,
+      "samples": 26,
+      "medianSubmitMs": 0.3999999985098839,
+      "p95SubmitMs": 0.5,
+      "target": [
+        -0.5,
+        -0.5,
+        -0.5
+      ]
+    },
+    "frameIntervalsMs": [
+      16.600000000000364,
+      33.399999999999636,
+      49.899999999999636,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50,
+      50.100000000000364,
+      50.100000000000364,
+      66.60000000000036
+    ]
+  }
+}

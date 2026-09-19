@@ -26,7 +26,6 @@ export interface ThemeRuntime {
   readonly background: THREE.Color | null;
   /** Optional image-based lighting; its texture is owned/disposed by the theme. */
   readonly environment?: THREE.Texture;
-  readonly volume: { readonly gridColor: number; readonly gridOpacity: number; readonly edgeOpacity: number; readonly homeOpacity: number };
   readonly motion: MotionStyle;
   /** Optional contrast backing for the common destination field; never changes hit targets. */
   readonly markerBackdrop?: number;

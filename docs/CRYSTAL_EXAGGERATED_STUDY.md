@@ -1,5 +1,7 @@
 # Crystal: exaggerated intact-volume study
 
+**Reference experiment — further whole-volume Crystal development stopped after human review.** The [Luminous electric study](LUMINOUS_ELECTRIC_STUDY.md) concentrates theme identity in pieces and environment and makes lattice display independent.
+
 19 September 2026. This supersedes the [first, visually too subtle optical experiment](CRYSTAL_OPTICAL_EXPERIMENT.md). The aim is to establish an unmistakable upper aesthetic bound, with perceptually convincing fake optics rather than physical simulation.
 
 ## Try it

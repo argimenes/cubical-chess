@@ -7,6 +7,7 @@ import { createSetup, SETUPS, type SetupId } from './rules/setups';
 import { PIECE_LETTERS, PROFILES, type Cell, type Move, type PieceType, type ProfileId, type Promotion } from './rules/types';
 import { THEMES } from './view/themes';
 import type { Point3, ThemeId } from './view/themes/types';
+import type { LatticeMode } from './view/lattice';
 import { BoardView, type CameraPreset, type SelectionInput } from './view/board';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -43,6 +44,7 @@ app.innerHTML = `
     <aside id="inspect-panel" class="panel inspect-panel">
       <section class="panel-section"><div class="section-title">VIEW & GUIDANCE</div>
         <label for="theme" class="field-label">Visual theme</label><select id="theme">${THEMES.map(theme => '<option value="' + theme.id + '">' + theme.name + '</option>').join('')}</select>
+        <label for="lattice-mode" class="field-label">Lattice display</label><select id="lattice-mode"><option value="full">Full · analytical grid</option><option value="structural">Structural · plane cues</option><option value="adaptive">Adaptive · local context</option></select>
         <fieldset id="crystal-options" hidden><legend>Crystal · exaggerated study</legend>
           <label class="toggle"><span>Cut facets / reflections</span><input type="checkbox" id="crystal-refraction" /><span class="switch"></span></label>
           <label class="toggle"><span>Spectral / prismatic</span><input type="checkbox" id="crystal-spectral" /><span class="switch"></span></label>
@@ -52,6 +54,7 @@ app.innerHTML = `
         </fieldset>
         <label class="toggle"><span>Ambient animation</span><input type="checkbox" id="ambient-effects" checked /><span class="switch"></span></label>
         <details id="camera-study"><summary>Camera study</summary><div class="director-actions"><button id="focus-piece" class="secondary-button" disabled>Focus selected</button><button id="orbit-piece" class="secondary-button" disabled>Inspect orbit</button></div>
+        <button id="close-piece" class="text-button" disabled>Close inspection</button>
         <button id="manual-camera" class="text-button">Stop camera motion</button><p class="muted small camera-note">Orbit lasts 12 seconds. Any input returns camera control to you.</p></details>
         <label class="toggle"><span>Path on hover / focus</span><input type="checkbox" id="trajectories" checked /><span class="switch"></span></label>
         <label class="toggle"><span>Piece labels</span><input type="checkbox" id="labels" checked /><span class="switch"></span></label>
@@ -214,6 +217,7 @@ function renderInspector(): void {
   element<HTMLSelectElement>('piece-navigator').value = piece ? String(piece.id) : '';
   element<HTMLButtonElement>('focus-piece').disabled = !piece;
   element<HTMLButtonElement>('orbit-piece').disabled = !piece;
+  element<HTMLButtonElement>('close-piece').disabled = !piece;
   element('selected-glyph').textContent = piece ? PIECE_LETTERS[piece.type] : '◇';
   element('selected-glyph').className = 'selected-glyph ' + (piece?.owner ?? '');
   element('selected-name').textContent = piece ? title(piece.owner) + ' ' + piece.type : 'Explore the cube';
@@ -388,6 +392,8 @@ for (const effect of ['refraction', 'spectral', 'caustics', 'inclusions']) eleme
   view.setCrystalEffects({ refraction: element<HTMLInputElement>('crystal-refraction').checked,
     spectral: element<HTMLInputElement>('crystal-spectral').checked, caustics: element<HTMLInputElement>('crystal-caustics').checked, inclusions: element<HTMLInputElement>('crystal-inclusions').checked });
 });
+element('lattice-mode').addEventListener('change', () => view.setLatticeMode(element<HTMLSelectElement>('lattice-mode').value as LatticeMode));
+element('close-piece').addEventListener('click', () => { clearPreview(); if (view.focusSelection(true, true)) announce('Close inspection. Any input returns control to you.'); });
 element('ambient-effects').addEventListener('change', () => view.setEffects(element<HTMLInputElement>('ambient-effects').checked));
 element('focus-piece').addEventListener('click', () => { clearPreview(); if (view.focusSelection()) announce('Focusing selected piece. Any input interrupts.'); });
 element('orbit-piece').addEventListener('click', () => { clearPreview(); if (view.focusSelection(true)) announce('Inspecting selected piece. Any input interrupts.'); });

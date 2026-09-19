@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { coordinates, formatCell } from '../rules/geometry';
+import { LatticeView, type LatticeMode } from './lattice';
 import { CameraDirector } from './camera-director';
 import { createTheme, disposeVisual } from './themes';
 import type { CrystalEffects, PieceVisual, SceneCue, ThemeId, ThemeRuntime } from './themes/types';
@@ -19,7 +20,6 @@ export interface BoardCallbacks {
   navigate: () => void;
 }
 const BLUE = 0x79d4ff;
-const CORAL = 0xff8f89;
 const GOLD = 0xffd78c;
 const CAPTURE = 0xffa94d;
 const world = (cell: Cell): THREE.Vector3 => {
@@ -54,7 +54,7 @@ export class BoardView {
   private readonly hoverBox: THREE.LineSegments;
   private readonly plane = new THREE.Group();
   private theme: ThemeRuntime = createTheme('diagnostic');
-  private readonly latticeMaterials: { material: THREE.LineBasicMaterial; role: 'grid' | 'edge' | 'home' }[] = [];
+  private readonly lattice = new LatticeView();
   readonly director: CameraDirector;
   private effectsEnabled = true;
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -91,12 +91,12 @@ export class BoardView {
     this.director = new CameraDirector(this.camera, this.controls);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.12;
-    this.controls.minDistance = 7;
+    this.controls.minDistance = 0.8;
     this.controls.maxDistance = 45;
     this.controls.minPolarAngle = 0.001;
     this.controls.maxPolarAngle = Math.PI - 0.001;
     this.controls.addEventListener('change', () => { this.dirty = true; });
-    this.scene.add(this.theme.root, this.assists, this.guide, this.picks, this.plane);
+    this.scene.add(this.theme.root, this.assists, this.guide, this.picks, this.plane, this.lattice.root);
     this.renderer.info.autoReset = false;
     // Capture phase cancels scripted motion before OrbitControls handles the same input.
     for (const event of ['pointerdown', 'wheel', 'keydown']) document.addEventListener(event, this.interruptCamera, { capture: true, passive: true });
@@ -122,26 +122,6 @@ export class BoardView {
   }
 
   private buildLattice(): void {
-    const points: number[] = [];
-    for (let a = -4; a <= 4; a++) for (let b = -4; b <= 4; b++) {
-      points.push(-4, a, b, 4, a, b, a, -4, b, a, 4, b, a, b, -4, a, b, 4);
-    }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
-    const gridMaterial = new THREE.LineBasicMaterial({ color: 0x6aadd6, transparent: true, opacity: 0.075, depthWrite: false });
-    this.latticeMaterials.push({ material: gridMaterial, role: 'grid' });
-    this.scene.add(new THREE.LineSegments(geometry, gridMaterial));
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(8, 8, 8)), new THREE.LineBasicMaterial({ color: BLUE, transparent: true, opacity: 0.42 }));
-    this.scene.add(edges);
-    this.latticeMaterials.push({ material: edges.material as THREE.LineBasicMaterial, role: 'edge' });
-    for (const [height, colour] of [[-4, BLUE], [4, CORAL]]) {
-      const grid = new THREE.GridHelper(8, 8, colour, colour);
-      grid.position.y = height;
-      (grid.material as THREE.Material).transparent = true;
-      (grid.material as THREE.Material).opacity = 0.2;
-      this.scene.add(grid);
-      this.latticeMaterials.push({ material: grid.material as THREE.LineBasicMaterial, role: 'home' });
-    }
     const planeGrid = new THREE.GridHelper(8, 8, GOLD, BLUE);
     (planeGrid.material as THREE.Material).transparent = true;
     (planeGrid.material as THREE.Material).opacity = 0.35;
@@ -301,6 +281,8 @@ export class BoardView {
     }
     this.disposeObject(this.guide); this.guide.clear();
     if (focused && this.options.trajectories) this.drawFocusedGuide(focused);
+    const selectedCell = this.selected === null ? null : this.state?.pieces[this.selected]?.cell ?? null;
+    this.lattice.inspect(selectedCell, this.fieldMoves.map(move => move.to), focused ? [focused.to, ...focused.path] : [], cell => this.cellVisible(cell));
     this.dirty = true;
   }
 
@@ -486,16 +468,14 @@ export class BoardView {
     this.scene.environment = this.theme.environment ?? null;
     if (this.theme.postprocessing?.preservePieceSilhouettes) this.camera.layers.enable(2);
     else this.camera.layers.disable(2);
-    for (const { material, role } of this.latticeMaterials) {
-      material.opacity = role === 'grid' ? this.theme.volume.gridOpacity : role === 'edge' ? this.theme.volume.edgeOpacity : this.theme.volume.homeOpacity;
-      if (role === 'grid') material.color.set(this.theme.volume.gridColor);
-    }
     this.theme.postprocessing?.resize(this.host.clientWidth, this.host.clientHeight, this.renderer.getPixelRatio());
     const hovered = this.hovered;
     if (this.state) this.setState(this.state);
     this.setSelection(this.selected, this.moves); this.setHover(hovered);
     this.renderSamples = []; this.dirty = true;
   }
+
+  setLatticeMode(mode: LatticeMode): void { this.lattice.setMode(mode); this.renderSamples = []; this.dirty = true; }
 
   setCrystalEffects(effects: CrystalEffects): void {
     this.theme.optical?.set(effects);
@@ -515,16 +495,16 @@ export class BoardView {
     this.dirty = true;
   }
 
-  focusSelection(orbit = false): boolean {
+  focusSelection(orbit = false, close = false): boolean {
     const cell = this.selected === null ? null : this.state?.pieces[this.selected]?.cell;
     if (cell === null || cell === undefined) return false;
-    this.director.focus(world(cell).toArray(), 3.2, performance.now(), this.reducedMotion.matches, orbit);
+    this.director.focus(world(cell).toArray(), close ? 0.75 : 3.2, performance.now(), this.reducedMotion.matches, orbit);
     this.dirty = true; return true;
   }
 
   presentationMetrics() {
     const sorted = [...this.renderSamples].sort((a, b) => a - b);
-    return { theme: this.theme.id, optical: this.theme.optical?.get() ?? null, director: this.director.mode, effects: this.effectsEnabled && !this.reducedMotion.matches,
+    return { theme: this.theme.id, lattice: this.lattice.metrics(), optical: this.theme.optical?.get() ?? null, director: this.director.mode, effects: this.effectsEnabled && !this.reducedMotion.matches,
       geometries: this.renderer.info.memory.geometries, textures: this.renderer.info.memory.textures,
       samples: sorted.length, medianSubmitMs: sorted[Math.floor(sorted.length / 2)] ?? 0,
       p95SubmitMs: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] ?? 0 };

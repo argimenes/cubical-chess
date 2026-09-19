@@ -2,7 +2,7 @@
 
 18 September 2026. A limited architecture experiment, with **Diagnostic** as the startup/default theme and **Luminous** as the single visual study. No movement rules or save semantics change.
 
-Follow-up: the approved spike is preserved. A separate [bounded Crystal experiment](CRYSTAL_OPTICAL_EXPERIMENT.md) now uses the theme contract; the findings below describe the original Diagnostic/Luminous spike.
+Historical report: the [Luminous electric study](LUMINOUS_ELECTRIC_STUDY.md) now develops the pieces/environment and moves lattice styling out of the theme contract. The original appearance and measurements below are retained as reference. A separate [bounded Crystal experiment](CRYSTAL_OPTICAL_EXPERIMENT.md) now uses the theme contract; the findings below describe the original Diagnostic/Luminous spike.
 
 ## Try it
 
