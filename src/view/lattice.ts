@@ -20,9 +20,15 @@ export class LatticeView {
   private localCells: Cell[] = [];
   constructor() {
     const lines = (values: number[], opacity: number) => {
-      const points: number[] = [];
-      for (const a of values) for (const b of values) points.push(-4,a,b,4,a,b,a,-4,b,a,4,b,a,b,-4,a,b,4);
-      return new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(points,3)),
+      const points: number[] = [], interior: number[] = [];
+      for (const a of values) for (const b of values) {
+        points.push(-4,a,b,4,a,b,a,-4,b,a,4,b,a,b,-4,a,b,4);
+        // A line is internal when both fixed coordinates lie inside the boundary.
+        // It crosses all eight cells on its axis, including their shared edges.
+        interior.push(...Array(6).fill(Math.abs(a)<4 && Math.abs(b)<4 ? 1 : 0));
+      }
+      return new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position',new THREE.Float32BufferAttribute(points,3))
+        .setAttribute('interiorLine',new THREE.Float32BufferAttribute(interior,1)),
         new THREE.LineBasicMaterial({ color: 0x6aadd6, transparent: true, opacity, depthWrite: false }));
     };
     this.grid = lines(Array.from({length:9},(_,i)=>i-4),0.075);
@@ -31,17 +37,25 @@ export class LatticeView {
     this.frostGrid = new THREE.LineSegments(this.grid.geometry, new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, toneMapped: false,
       uniforms: { time: this.frostTime },
-      vertexShader: 'varying vec3 cellPoint; void main(){ cellPoint=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+      vertexShader: 'attribute float interiorLine; varying float interior; varying vec3 cellPoint; void main(){ interior=interiorLine; cellPoint=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
       fragmentShader: `
-        uniform float time; varying vec3 cellPoint;
+        uniform float time; varying float interior; varying vec3 cellPoint;
         void main(){
           float grain = pow(0.5 + 0.5 * sin(dot(cellPoint, vec3(53.1, 71.7, 91.3))), 24.0);
           float phase = dot(floor(cellPoint * 3.0), vec3(2.7, 4.1, 1.9));
           float glitter = pow(0.5 + 0.5 * sin(phase + time * 1.1), 24.0);
-          gl_FragColor = vec4(mix(vec3(0.48, 0.68, 0.86), vec3(0.85, 0.94, 1.0), glitter), 0.042 + grain * (0.04 + glitter * 0.38));
+          // Every integer marks a cell junction, not just the two home planes.
+          float junction = pow(0.5 + 0.5 * cos(6.2831853 * (cellPoint.x + cellPoint.y + cellPoint.z)), 24.0);
+          // Keep continuous interior edges readable between sparse glitter events.
+          float base = mix(0.065, 0.145, interior);
+          // Sparse light traces give the cell network an electric wireframe character.
+          float trace = pow(0.5 + 0.5 * cos(dot(cellPoint, vec3(2.1)) - time * 0.8), 48.0);
+          vec3 electric = mix(vec3(0.12, 0.65, 0.95), vec3(0.76, 0.95, 1.0), max(glitter, junction * 0.65));
+          gl_FragColor = vec4(electric, base + junction * 0.065 + trace * 0.065 + grain * (0.04 + glitter * 0.28));
           #include <colorspace_fragment>
         }`,
     }));
+    this.frostGrid.name = 'lattice:frosted-cells';
     this.edge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(8,8,8)), new THREE.LineBasicMaterial({color:0x79d4ff,transparent:true,opacity:0.42}));
     for (const [height,colour] of [[-4,0x79d4ff],[4,0xff8f89]]) {
       const grid = new THREE.GridHelper(8,8,colour,colour); grid.position.y=height;

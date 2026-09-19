@@ -63,7 +63,7 @@ app.innerHTML = `
           <p class="muted small">Compare internal facets with cell inclusions. An intentionally intense study. Toggle components to compare; orbit to catch the light.</p>
         </fieldset>
         <div id="luminous-options" hidden><label class="toggle"><span>Frosty star twinkle</span><input type="checkbox" id="star-twinkle" /><span class="switch"></span></label>
-          <label class="toggle"><span>Frosted cell lines</span><input type="checkbox" id="frosted-cells" /><span class="switch"></span></label></div>
+          <label class="toggle"><span title="All 512 cells, including interior edges">Frosted cell lines · all cells</span><input type="checkbox" id="frosted-cells" /><span class="switch"></span></label></div>
         <label class="toggle"><span>Ambient animation</span><input type="checkbox" id="ambient-effects" checked /><span class="switch"></span></label>
         <details id="camera-study"><summary>Camera study</summary><div class="director-actions"><button id="focus-piece" class="secondary-button" disabled>Focus selected</button><button id="orbit-piece" class="secondary-button" disabled>Inspect orbit</button></div>
         <button id="close-piece" class="text-button" disabled>Close inspection</button>
