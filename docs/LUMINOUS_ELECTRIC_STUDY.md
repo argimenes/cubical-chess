@@ -37,6 +37,14 @@ Each piece combines an opaque faceted body, restrained edge definition and 24 sm
 
 The sheets use the actual runtime models at front, rear, left, right, above, below and oblique poses. This is visual review of rendered models, **not a measured human-recognition result**. Colour identifies the armies consistently in these views, but the saturated red palette and intense highlights need physical-display review. Labels remain available. Small projected size, overlapping pieces in the opening and briefly bright facets can still weaken type recognition. Final forms, lighting and relative piece sizes remain unsettled.
 
+## Frosted cell-line follow-up
+
+Luminous now has an optional **Frosted cell lines** switch. It starts off. When enabled, it shows the complete analytical cell grid as faint ice-blue/white lines with sparse, subtle glitter. It shares the exact analytical grid geometry—243 continuous axis lines that cover all cell boundaries—rather than drawing overlapping boxes for 512 cells. Plain grid/home-plane lines are suppressed while frost is active to avoid accumulating brightness.
+
+The chosen Full/Structural/Adaptive setting is retained and restored when frost is disabled. Adaptive local cues can remain visible above the faint frost grid. The setting is retained across theme switches within the page but is active only in Luminous. Ambient animation off and reduced motion freeze the glitter. It adds no textures or full-screen pass; line animation follows Luminous's existing redraw cadence.
+
+[Frosted cell lines](electric-frosted-cells.png)
+
 ## Lattice belongs to navigation
 
 The theme contract no longer supplies lattice colour or opacity. `LatticeView` owns fixed-coordinate navigation geometry and its display settings. Changing theme preserves the selected lattice mode; all three modes work in Diagnostic, Luminous and the retained Crystal reference.
