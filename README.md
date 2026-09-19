@@ -30,7 +30,7 @@ npm run test:browser
 - Depth chooser for overlapping cells, piece navigator, accessible destination buttons, and optional level isolation.
 - A single-screen desktop/tablet layout with temporary spatial symbols and letter labels.
 
-Select a piece to see its full movement field. Hover a destination or focus its button to emphasize that marker and inspect one path: a continuous ray for sliders, a dashed elbow for Knights. The inspector explains displacement, capture and prospective check without changing the game. Gold markers indicate legal destinations; larger amber markers indicate captures. Click or press Enter to move. On touchscreens, tap a destination to inspect it, then tap it again to commit.
+Select a piece to see its full movement field. Hover a destination or focus its button to emphasize that marker and inspect one path: a continuous ray for sliders, a dashed elbow for Knights. The inspector explains displacement, capture and prospective check without changing the game. Reflective, metallic gold markers indicate legal destinations; larger, warmer gold markers indicate captures. The material uses a small shared reflection map so it remains legible in every theme. Click or press Enter to move. On touchscreens, tap a destination to inspect it, then tap it again to commit.
 
 Drag to orbit, scroll or pinch to zoom, and right-drag or use two fingers to pan. If multiple cells overlap under the pointer, choose the intended coordinate from the depth chooser. The piece navigator and destination buttons provide an alternative to picking in the cube. Level isolation is optional; the full cube remains the default.
 
@@ -41,6 +41,8 @@ The **Spatial study** starts with a central knight and 24 legal destinations. **
 ## Project layout
 
 `src/rules/` owns the 512-cell state, rule profiles, attack geometry, legal moves, make/unmake, terminal status, and setups. It has no browser or Three.js dependencies. `src/view/board.ts` renders pieces, guides and picking proxies from that state. `src/main.ts` coordinates user commands, status and the move log; it revalidates moves through the rules core before committing them.
+
+Captures animate as a short electrical takeover: the attacker pulses and crackles during approach, and the victim shatters into glittering crystal shards that scatter and fade. Replay pauses and resumes the whole sequence. Undo, reset, loading a position, returning to the present or switching themes clears the effects immediately. Turning off **Ambient animation** or enabling reduced motion suppresses the electrical/shard effects.
 
 The default renderer draws on changes and during camera/move animation. Destination markers are instanced and grid segments are batched. Themes own piece visuals, materials, lighting and effects; the common view owns copied positions, picking and movement assistance. The development build exposes read-only `window.__cubical` diagnostics used by browser tests; there is no test-only move command.
 

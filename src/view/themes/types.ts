@@ -11,6 +11,13 @@ export type SceneCue =
   | { readonly kind: 'selection' | 'trajectory' | 'check' | 'position'; readonly at: Point3 }
   | { readonly kind: 'move' | 'capture'; readonly from: Point3; readonly at: Point3; readonly owner: PlayerId };
 export interface PieceVisual { readonly object: THREE.Group; dispose(): void }
+export interface CaptureVisual {
+  readonly root: THREE.Group;
+  readonly attacker: THREE.Group;
+  readonly durationMs: number;
+  update(progress: number): { travel: number; scale: number };
+  dispose(): void;
+}
 export interface MotionStyle { readonly durationMs: number; sample(progress: number): number }
 /** Optional world compositor (with or without postprocessing). Reset metrics before render. */
 export interface PresentationPass {
@@ -33,6 +40,7 @@ export interface ThemeRuntime {
   readonly stars?: { setTwinkle(enabled: boolean): void; getTwinkle(): boolean };
   readonly optical?: { set(effects: CrystalEffects): void; get(): CrystalEffects };
   createPiece(piece: PieceAppearance): PieceVisual;
+  createCapture?(attacker: PieceAppearance, victim: PieceAppearance): CaptureVisual;
   onCue(cue: SceneCue, time: number): void;
   /** Return true only when an effect needs a frame; effects never block game commands. */
   update(time: number, motionEnabled: boolean): boolean;

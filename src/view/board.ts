@@ -3,9 +3,10 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { coordinates, formatCell } from '../rules/geometry';
 import { LatticeView, type LatticeMode } from './lattice';
+import { GoldMarkers } from './gold-markers';
 import { CameraDirector } from './camera-director';
 import { createTheme, disposeVisual } from './themes';
-import type { CrystalEffects, PieceVisual, SceneCue, ThemeId, ThemeRuntime } from './themes/types';
+import type { CaptureVisual, CrystalEffects, PieceVisual, SceneCue, ThemeId, ThemeRuntime } from './themes/types';
 import type { Cell, Move, Piece } from '../rules/types';
 import { PIECE_LETTERS } from '../rules/types';
 
@@ -55,6 +56,7 @@ export class BoardView {
   private readonly plane = new THREE.Group();
   private theme: ThemeRuntime = createTheme('diagnostic');
   private readonly lattice = new LatticeView();
+  private readonly goldMarkers: GoldMarkers;
   readonly director: CameraDirector;
   private effectsEnabled = true;
   private starTwinkle = false;
@@ -62,7 +64,7 @@ export class BoardView {
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   private renderSamples: number[] = [];
   private readonly interruptCamera = (): void => { this.director.interrupt(); };
-  private readonly motionPreferenceChanged = (): void => { this.director.interrupt(); this.theme.clearTransient(); this.dirty = true; };
+  private readonly motionPreferenceChanged = (): void => { this.director.interrupt(); this.theme.clearTransient(); if (this.capture) this.settleAnimation(); this.dirty = true; };
   private readonly axisLabels: CSS2DObject[] = [];
   private readonly resizeObserver: ResizeObserver;
   private options: ViewOptions = { trajectories: true, labels: true, plane: null, isolate: false };
@@ -76,6 +78,7 @@ export class BoardView {
   private animationStart = 0;
   private animationDuration = 0;
   private animationPausedAt: number | null = null;
+  private capture: { visual: CaptureVisual; attacker: number; cell: Cell; progress: number; elapsed: number; lastFrame: number } | null = null;
   private animationFrame = 0;
   private lastRender = 0;
   private renders = 0;
@@ -86,6 +89,7 @@ export class BoardView {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.goldMarkers = new GoldMarkers(this.renderer);
     this.renderer.domElement.setAttribute('aria-label', 'Interactive 8 by 8 by 8 chess cube. Drag to orbit; click or tap a piece to select.');
     this.renderer.domElement.tabIndex = 0;
     this.host.append(this.renderer.domElement);
@@ -167,6 +171,9 @@ export class BoardView {
   setState(state: ScenePosition, animate = false, durationMs = this.theme.motion.durationMs): void {
     this.director.interrupt();
     this.theme.clearTransient();
+    this.clearCapture();
+    const victim = animate ? this.state?.pieces.find(p => p.cell !== null && state.pieces[p.id]?.cell === null) : undefined;
+    const attacker = victim ? state.pieces.find(p => p.cell === victim.cell && this.state?.pieces[p.id]?.cell !== p.cell) : undefined;
     // Promotion replaces the visual, but must retain the source of its movement.
     const starts = new Map([...this.pieces].map(([id, view]) => [id, view.group.position.clone()]));
     this.state = Object.freeze({ pieces: Object.freeze(state.pieces.map(piece => Object.freeze({ ...piece }))) });
@@ -191,6 +198,18 @@ export class BoardView {
     this.animationStart = animate && !this.reducedMotion.matches ? performance.now() : 0;
     this.animationDuration = Math.max(1, durationMs);
     this.animationPausedAt = null;
+    if (this.animationStart && this.effectsEnabled && victim && attacker && this.theme.createCapture) {
+      const visual = this.theme.createCapture(Object.freeze({ type: attacker.type, owner: attacker.owner }),
+        Object.freeze({ type: victim.type, owner: victim.owner }));
+      visual.root.position.copy(world(victim.cell!));
+      this.scene.add(visual.root); this.pieces.get(attacker.id)!.group.add(visual.attacker);
+      if (this.theme.postprocessing?.preservePieceSilhouettes) {
+        visual.root.traverse(object => object.layers.set(2)); visual.attacker.traverse(object => object.layers.set(2));
+      }
+      this.capture = { visual, attacker: attacker.id, cell: victim.cell!, progress: 0, elapsed: 0, lastFrame: performance.now() };
+      this.animationDuration = visual.durationMs;
+      visual.update(0);
+    }
     if (!this.animationStart) for (const view of this.pieces.values()) view.group.position.copy(view.target);
     this.applyVisibility();
     this.dirty = true;
@@ -218,6 +237,7 @@ export class BoardView {
   }
 
   private applyVisibility(): void {
+    if (this.capture) this.capture.visual.root.visible = this.cellVisible(this.capture.cell);
     for (const [id, view] of this.pieces) {
       const piece = this.state?.pieces[id];
       view.group.visible = !!piece && piece.cell !== null && this.cellVisible(piece.cell);
@@ -241,7 +261,7 @@ export class BoardView {
     if (unique.length) {
       const geometry = new THREE.OctahedronGeometry(0.11);
       // The complete field stays readable through occupied cells, including capture endpoints.
-      this.markers = new THREE.InstancedMesh(geometry, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.82, depthTest: false, depthWrite: false }), unique.length);
+      this.markers = new THREE.InstancedMesh(geometry, this.goldMarkers.createMaterial(), unique.length);
       this.markers.renderOrder = 3;
       this.markers.layers.set(1);
       if (this.theme.markerBackdrop !== undefined) {
@@ -269,8 +289,8 @@ export class BoardView {
       const active = move === focused;
       const scale = (move.capturedId === null ? 1 : 1.15) * (active ? 1.65 : 1);
       matrix.makeScale(scale, scale, scale).setPosition(world(move.to));
-      const color = new THREE.Color(move.capturedId === null ? GOLD : CAPTURE);
-      if (active) color.lerp(new THREE.Color(0xffffff), 0.25);
+      const color = new THREE.Color(move.capturedId === null ? 0xf4c35b : 0xe99536);
+      if (active) color.lerp(new THREE.Color(0xffe7ad), 0.18);
       else if (focused) color.multiplyScalar(0.5);
       this.markers!.setMatrixAt(index, matrix); this.markers!.setColorAt(index, color);
       this.markerBackplates?.setMatrixAt(index, matrix);
@@ -329,15 +349,17 @@ export class BoardView {
   }
 
   /** Read-only UI diagnostics: reflects the rendered field rather than predicting it. */
-  movementField(): { cells: Cell[]; focused: Cell | null; guideKind: Move['kind'] | null; guideCount: number; points: number[][]; dashed: boolean } {
+  movementField() {
     const focused = this.fieldMoves.find(move => move.to === this.hovered);
     const line = this.guide.children[0] as THREE.Line | undefined;
     const position = line?.geometry.getAttribute('position');
+    const material = this.markers?.material as THREE.MeshStandardMaterial | undefined;
     return {
       cells: this.fieldMoves.map(m => m.to), focused: focused?.to ?? null,
       guideKind: line && focused ? focused.kind : null, guideCount: this.guide.children.length,
       points: position ? Array.from({ length: position.count }, (_, i) => [position.getX(i), position.getY(i), position.getZ(i)]) : [],
       dashed: line?.material instanceof THREE.LineDashedMaterial,
+      surface: material ? { type: material.type, metalness: material.metalness, roughness: material.roughness, reflections: !!material.envMap } : null,
     };
   }
 
@@ -389,17 +411,34 @@ export class BoardView {
 
   get isAnimating(): boolean { return this.animationStart !== 0; }
 
+  private clearCapture(): void {
+    if (!this.capture) return;
+    const { visual, attacker } = this.capture;
+    this.pieces.get(attacker)?.group.scale.setScalar(1);
+    visual.root.removeFromParent(); visual.attacker.removeFromParent(); visual.dispose();
+    this.capture = null;
+  }
+
+  private settleAnimation(): void {
+    this.clearCapture(); this.animationStart = 0; this.animationPausedAt = null;
+    for (const piece of this.pieces.values()) piece.group.position.copy(piece.target);
+    this.dirty = true;
+  }
+
   setAnimationPaused(paused: boolean): void {
     if (!this.animationStart) return;
     if (paused && this.animationPausedAt === null) this.animationPausedAt = performance.now();
     else if (!paused && this.animationPausedAt !== null) {
       this.animationStart += performance.now() - this.animationPausedAt;
       this.animationPausedAt = null;
+      if (this.capture) this.capture.lastFrame = performance.now();
     }
   }
 
   animationSnapshot() {
     return { active: this.isAnimating, paused: this.animationPausedAt !== null,
+      capture: this.capture ? { attacker: this.capture.attacker, cell: this.capture.cell, progress: this.capture.progress,
+        phase: this.capture.progress < 0.38 ? 'charging' : 'shattering' } : null,
       pieces: [...this.pieces].map(([id, view]) => ({ id, position: view.group.position.toArray(), target: view.target.toArray() })) };
   }
 
@@ -450,10 +489,22 @@ export class BoardView {
     const effectsChanged = this.theme.update(now, this.effectsEnabled && !this.reducedMotion.matches);
     this.lattice.update(now, this.effectsEnabled && !this.reducedMotion.matches);
     if (this.animationStart && this.animationPausedAt === null) {
-      const t = this.reducedMotion.matches ? 1 : Math.min((now - this.animationStart) / this.animationDuration, 1);
+      if (this.capture) {
+        // First-use shader compilation or a slow frame must not skip the contact beat.
+        this.capture.elapsed += Math.min(Math.max(now - this.capture.lastFrame, 0), 100);
+        this.capture.lastFrame = now;
+      }
+      const elapsed = this.capture?.elapsed ?? now - this.animationStart;
+      const t = this.reducedMotion.matches ? 1 : Math.min(elapsed / this.animationDuration, 1);
       const ease = this.theme.motion.sample(t);
       for (const view of this.pieces.values()) view.group.position.lerpVectors(view.start, view.target, ease);
-      if (t === 1) this.animationStart = 0;
+      if (this.capture) {
+        this.capture.progress = t;
+        const frame = this.capture.visual.update(t), attacker = this.pieces.get(this.capture.attacker)!;
+        attacker.group.position.lerpVectors(attacker.start, attacker.target, frame.travel);
+        attacker.group.scale.setScalar(frame.scale);
+      }
+      if (t === 1) { this.animationStart = 0; this.clearCapture(); }
       this.dirty = true;
     }
     if (this.dirty || moved || directed || effectsChanged) {
@@ -486,6 +537,7 @@ export class BoardView {
   setTheme(id: ThemeId): void {
     if (id === this.theme.id) return;
     this.director.interrupt();
+    this.clearCapture();
     for (const piece of this.pieces.values()) {
       this.scene.remove(piece.group); this.picks.remove(piece.proxy); piece.visual.dispose(); piece.label.element.remove();
     }
@@ -520,6 +572,7 @@ export class BoardView {
 
   setEffects(enabled: boolean): void {
     this.effectsEnabled = enabled;
+    if (!enabled && this.capture) this.settleAnimation();
     if (!enabled) this.theme.clearTransient();
     this.dirty = true;
   }
@@ -547,6 +600,7 @@ export class BoardView {
   }
 
   dispose(): void {
+    this.clearCapture();
     for (const event of ['pointerdown', 'wheel', 'keydown']) document.removeEventListener(event, this.interruptCamera, true);
     this.reducedMotion.removeEventListener('change', this.motionPreferenceChanged);
     for (const piece of this.pieces.values()) {
@@ -556,6 +610,7 @@ export class BoardView {
     this.director.interrupt(); this.scene.remove(this.theme.root); this.theme.postprocessing?.dispose(); this.theme.dispose();
     cancelAnimationFrame(this.animationFrame); this.resizeObserver.disconnect(); this.controls.dispose();
     this.disposeObject(this.scene); this.targetProxyGeometry.dispose(); this.pieceProxyGeometry.dispose();
+    this.goldMarkers.dispose();
     this.renderer.dispose(); this.labels.domElement.remove(); this.renderer.domElement.remove();
   }
 }

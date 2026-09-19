@@ -3,6 +3,7 @@ import { createLuminousTheme } from './luminous';
 import { disposeVisual } from './dispose';
 export { disposeVisual } from './dispose';
 import { createCrystalTheme } from './crystal';
+import { electricCapture } from './electric-capture';
 import type { PieceAppearance, PieceVisual, ThemeId, ThemeRuntime } from './types';
 
 export const THEMES: { id: ThemeId; name: string }[] = [
@@ -55,6 +56,7 @@ export function createTheme(id: ThemeId): ThemeRuntime {
     id, root, background: null,
     motion: { durationMs: 190, sample: t => 1 - (1 - t) ** 3 },
     createPiece: piece => pieceVisual(piece),
+    createCapture: (attacker, victim) => electricCapture(attacker, pieceVisual(victim), victim),
     onCue() {}, update: () => false, clearTransient() {},
     dispose() { disposeVisual(root); root.clear(); },
   };

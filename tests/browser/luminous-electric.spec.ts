@@ -7,6 +7,32 @@ test.beforeEach(async ({page}) => {
 });
 test.afterEach(()=>expect(errors).toEqual([]));
 
+test('gold destination material remains reflective across themes and preserves the field and capture picking', async ({page}) => {
+  await page.locator('#setup').selectOption('spatial-study'); await page.locator('#new-game').click();
+  await page.locator('#ambient-effects').uncheck();
+  const before = await page.evaluate(() => ({ board: window.__cubical.snapshot().board,
+    moves: window.__cubical.snapshot().moves, save: localStorage.getItem('cubical-chess.active-game'),
+    points: window.__cubical.snapshot().moves.map(m => window.__cubical.project(m.to)) }));
+  for (const theme of ['diagnostic', 'crystal', 'luminous']) {
+    await page.locator('#theme').selectOption(theme);
+    await page.evaluate(() => new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+    const field = await page.evaluate(() => window.__cubical.movementField());
+    expect(field.cells).toHaveLength(24);
+    expect(field.surface).toEqual({ type: 'MeshStandardMaterial', metalness: 1, roughness: 0.23, reflections: true });
+    expect(await page.evaluate(() => ({ board: window.__cubical.snapshot().board,
+      moves: window.__cubical.snapshot().moves, save: localStorage.getItem('cubical-chess.active-game'),
+      points: window.__cubical.snapshot().moves.map(m => window.__cubical.project(m.to)) }))).toEqual(before);
+  }
+  await page.screenshot({path: 'docs/metallic-gold-destinations.png'});
+  await page.getByRole('button', {name: 'Move to (4, 3, 5)', exact: true}).focus();
+  expect((await page.evaluate(() => window.__cubical.movementField())).focused).toBe(348);
+  await page.screenshot({path: 'docs/metallic-gold-capture-focus.png'});
+  const target = await page.evaluate(() => window.__cubical.project(348));
+  await page.mouse.click(target.x, target.y);
+  if (await page.locator('#depth-chooser').isVisible()) await page.locator('#depth-options button').filter({hasText: '(4, 3, 5)'}).click();
+  expect((await page.evaluate(() => window.__cubical.snapshot())).pieces[9].cell).toBeNull();
+});
+
 test('lattice modes remain independent and derive adaptive cells from the authoritative field',async({page})=>{
   await page.locator('#setup').selectOption('spatial-study');await page.locator('#new-game').click();
   const before=await page.evaluate(()=>window.__cubical.snapshot());

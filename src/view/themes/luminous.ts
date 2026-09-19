@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { disposeVisual } from './dispose';
+import { electricCapture } from './electric-capture';
 import type { PieceAppearance, PieceVisual, ThemeRuntime } from './types';
 
 const AXES = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
@@ -154,22 +155,23 @@ export function createLuminousTheme(): ThemeRuntime {
     stars: { setTwinkle: enabled => { frost.value = Number(enabled); }, getTwinkle: () => frost.value === 1 },
     motion: { durationMs: 280, sample: t => 1 - (1 - t) ** 3 },
     createPiece,
+    createCapture: (attacker, victim) => electricCapture(attacker, createPiece(victim), victim),
     onCue(cue, start) {
-      if (cue.kind !== 'move' && cue.kind !== 'capture') return;
+      if (cue.kind !== 'move') return; // Captures use the coordinated attacker/shard visual.
       clearTransient();
-      const capture = cue.kind === 'capture', points: number[] = [];
-      for (let i = 0; i < (capture ? 32 : 14); i++) {
-        const y = 1 - 2 * (i + 0.5) / (capture ? 32 : 14), r = Math.sqrt(1 - y * y), a = i * 2.39996;
+      const points: number[] = [];
+      for (let i = 0; i < 14; i++) {
+        const y = 1 - 2 * (i + 0.5) / 14, r = Math.sqrt(1 - y * y), a = i * 2.39996;
         points.push(Math.cos(a)*r,y,Math.sin(a)*r);
       }
       const material = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-        uniforms: { progress: { value: 0 }, tint: { value: new THREE.Color(edges[cue.owner]) }, radius: { value: capture ? 0.5 : 0.23 } },
+        uniforms: { progress: { value: 0 }, tint: { value: new THREE.Color(edges[cue.owner]) }, radius: { value: 0.23 } },
         vertexShader: 'uniform float progress, radius; void main(){ gl_Position=projectionMatrix*modelViewMatrix*vec4(position*radius*(0.2+progress),1.0); gl_PointSize=2.0; }',
         fragmentShader: 'uniform float progress; uniform vec3 tint; void main(){ float a=(1.0-progress)*(1.0-smoothstep(0.1,0.5,length(gl_PointCoord-0.5))); gl_FragColor=vec4(tint,a); }',
       });
       const light = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(points, 3)), material);
-      light.position.fromArray(capture ? cue.at : cue.from); transient.add(light);
-      burst = { material, start, duration: capture ? 500 : 280 };
+      light.position.fromArray(cue.from); transient.add(light);
+      burst = { material, start, duration: 280 };
     },
     update(now, animated) {
       const dt = previous === null ? 0 : Math.min(Math.max(now-previous,0),100); previous = now;
