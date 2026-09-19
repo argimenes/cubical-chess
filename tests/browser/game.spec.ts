@@ -6,7 +6,7 @@ interface Diagnostics {
   project(cell: number): { x: number; y: number };
   metrics(): { drawCalls: number; triangles: number; lastRenderMs: number; renders: number };
   camera(): number[];
-  presentation(): { lattice: { mode: string; localCells: number[]; localSegments: number }; optical: { refraction: boolean; spectral: boolean; caustics: boolean; inclusions: boolean } | null; theme: string; director: string; effects: boolean; geometries: number; textures: number; samples: number; medianSubmitMs: number; p95SubmitMs: number; target: number[] };
+  presentation(): { starTwinkle: boolean | null; lattice: { mode: string; frostedCells: boolean; localCells: number[]; localSegments: number }; optical: { refraction: boolean; spectral: boolean; caustics: boolean; inclusions: boolean } | null; theme: string; director: string; effects: boolean; geometries: number; textures: number; samples: number; medianSubmitMs: number; p95SubmitMs: number; target: number[] };
   movementField(): { cells: number[]; focused: number | null; guideKind: string | null; guideCount: number; points: number[][]; dashed: boolean; inspectedCell: number | null };
 }
 declare global { interface Window { __cubical: Diagnostics } }

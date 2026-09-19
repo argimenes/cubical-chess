@@ -52,6 +52,8 @@ app.innerHTML = `
           <label class="toggle"><span>Cubical inclusions</span><input type="checkbox" id="crystal-inclusions" /><span class="switch"></span></label>
           <p class="muted small">Compare internal facets with cell inclusions. An intentionally intense study. Toggle components to compare; orbit to catch the light.</p>
         </fieldset>
+        <div id="luminous-options" hidden><label class="toggle"><span>Frosty star twinkle</span><input type="checkbox" id="star-twinkle" /><span class="switch"></span></label>
+          <label class="toggle"><span>Frosted cell lines</span><input type="checkbox" id="frosted-cells" /><span class="switch"></span></label></div>
         <label class="toggle"><span>Ambient animation</span><input type="checkbox" id="ambient-effects" checked /><span class="switch"></span></label>
         <details id="camera-study"><summary>Camera study</summary><div class="director-actions"><button id="focus-piece" class="secondary-button" disabled>Focus selected</button><button id="orbit-piece" class="secondary-button" disabled>Inspect orbit</button></div>
         <button id="close-piece" class="text-button" disabled>Close inspection</button>
@@ -384,6 +386,7 @@ element('theme').addEventListener('change', () => {
   const theme = element<HTMLSelectElement>('theme').value as ThemeId;
   view.setTheme(theme);
   element('crystal-options').hidden = theme !== 'crystal';
+  element('luminous-options').hidden = theme !== 'luminous';
   for (const effect of ['refraction', 'spectral', 'caustics', 'inclusions']) element<HTMLInputElement>('crystal-' + effect).checked = theme === 'crystal' && effect !== 'inclusions';
   if (theme === 'crystal') view.setCrystalEffects({ refraction: true, spectral: true, caustics: true, inclusions: false });
   announce('Theme changed. Game and movement field retained.');
@@ -394,6 +397,8 @@ for (const effect of ['refraction', 'spectral', 'caustics', 'inclusions']) eleme
 });
 element('lattice-mode').addEventListener('change', () => view.setLatticeMode(element<HTMLSelectElement>('lattice-mode').value as LatticeMode));
 element('close-piece').addEventListener('click', () => { clearPreview(); if (view.focusSelection(true, true)) announce('Close inspection. Any input returns control to you.'); });
+element('frosted-cells').addEventListener('change', () => view.setFrostedCells(element<HTMLInputElement>('frosted-cells').checked));
+element('star-twinkle').addEventListener('change', () => view.setStarTwinkle(element<HTMLInputElement>('star-twinkle').checked));
 element('ambient-effects').addEventListener('change', () => view.setEffects(element<HTMLInputElement>('ambient-effects').checked));
 element('focus-piece').addEventListener('click', () => { clearPreview(); if (view.focusSelection()) announce('Focusing selected piece. Any input interrupts.'); });
 element('orbit-piece').addEventListener('click', () => { clearPreview(); if (view.focusSelection(true)) announce('Inspecting selected piece. Any input interrupts.'); });

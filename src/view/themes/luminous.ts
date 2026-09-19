@@ -66,17 +66,49 @@ export function createLuminousTheme(): ThemeRuntime {
   let previous: number | null = null, lastFrame = -Infinity;
   const transient = new THREE.Group(); root.add(transient);
   let burst: { material: THREE.ShaderMaterial; start: number; duration: number } | null = null;
-  // A distant, sparse field. Stars have no glow halo and never resemble gold destinations.
-  const stars: number[] = [];
-  for (let i = 0; i < 480; i++) {
-    const y = 1 - 2 * (i + 0.5) / 480, r = Math.sqrt(1 - y * y), a = i * 2.39996;
-    stars.push(Math.cos(a) * r * 58, y * 58, Math.sin(a) * r * 58);
+  // The camera and board sit inside a distant star sphere, with no visible sphere surface.
+  // All stars share one draw call; a few acquire tiny icy diffraction spikes when enabled.
+  const stars: number[] = [], frost = { value: 0 };
+  const count = 3200;
+  for (let i = 0; i < count; i++) {
+    const y = 1 - 2 * (i + 0.5) / count, r = Math.sqrt(1 - y * y);
+    const angle = i * 2.39996 + Math.sin(i * 17.31) * 0.12;
+    stars.push(Math.cos(angle) * r * 58, y * 58, Math.sin(angle) * r * 58);
   }
-  root.add(new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(stars, 3)),
+  const starfield = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(stars, 3)),
     new THREE.ShaderMaterial({ transparent: true, depthWrite: false, toneMapped: false,
-      vertexShader: 'varying float light; void main(){ light = fract(sin(position.x * 12.3 + position.y) * 4321.0); gl_PointSize = 1.0 + step(0.93, light); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: 'varying float light; void main(){ if(length(gl_PointCoord - 0.5)>0.5) discard; gl_FragColor = vec4(mix(vec3(0.32,0.45,0.7),vec3(0.85,0.92,1.0),light), 0.3 + light * 0.5); }',
-    })));
+      uniforms: { time, frost },
+      vertexShader: `
+        uniform float time, frost;
+        varying float light, flash, icy, sizeRatio;
+        void main(){
+          light = fract(sin(position.x * 12.3 + position.y * 3.71) * 4321.0);
+          float phase = dot(position, vec3(1.7, 2.3, 0.9));
+          flash = pow(0.5 + 0.5 * sin(time * (0.65 + light * 0.8) + phase), 5.0);
+          icy = frost * step(0.76, light);
+          float sharpSize = 1.7 + step(0.65, light) * 0.8 + step(0.92, light) * 1.8;
+          gl_PointSize = mix(sharpSize, 7.0 + flash * 6.0, icy);
+          sizeRatio = gl_PointSize / sharpSize;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: `
+        varying float light, flash, icy, sizeRatio;
+        void main(){
+          vec2 p = gl_PointCoord - 0.5; float r = length(p);
+          if (r > 0.5) discard;
+          float sharp = 1.0 - smoothstep(0.22, 0.5, r);
+          // Keep the bright core the same pixel size when the frost sprite grows.
+          float core = 1.0 - smoothstep(0.18, 0.5, r * sizeRatio);
+          float spikes = exp(-min(abs(p.x), abs(p.y)) * 48.0) * pow(max(0.0, 1.0 - r * 2.0), 2.0);
+          float profile = mix(sharp, core + spikes * (0.4 + flash) + exp(-r * 13.0) * 0.05, icy);
+          vec3 color = mix(vec3(0.48, 0.64, 0.92), vec3(1.0, 1.0, 1.0), light);
+          color = mix(color, vec3(0.58, 0.83, 1.0) + core * 0.35, icy);
+          gl_FragColor = vec4(color, min(1.0, profile * (0.65 + light * 0.5) * mix(1.0, 0.9 + flash * 0.6, icy)));
+          #include <colorspace_fragment>
+        }`,
+    }));
+  starfield.name = 'luminous:star-sphere';
+  root.add(starfield);
 
   function createPiece(piece: PieceAppearance): PieceVisual {
     const object = new THREE.Group(), geometry = form(piece.type);
@@ -119,6 +151,7 @@ export function createLuminousTheme(): ThemeRuntime {
   const clearTransient = () => { disposeVisual(transient); transient.clear(); burst = null; };
   return {
     id: 'luminous', root, background: new THREE.Color(0x010207),
+    stars: { setTwinkle: enabled => { frost.value = Number(enabled); }, getTwinkle: () => frost.value === 1 },
     motion: { durationMs: 280, sample: t => 1 - (1 - t) ** 3 },
     createPiece,
     onCue(cue, start) {

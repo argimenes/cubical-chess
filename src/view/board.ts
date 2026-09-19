@@ -57,6 +57,8 @@ export class BoardView {
   private readonly lattice = new LatticeView();
   readonly director: CameraDirector;
   private effectsEnabled = true;
+  private starTwinkle = false;
+  private frostedCells = false;
   private readonly reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   private renderSamples: number[] = [];
   private readonly interruptCamera = (): void => { this.director.interrupt(); };
@@ -423,6 +425,7 @@ export class BoardView {
     const directed = this.director.update(now);
     const moved = this.controls.update();
     const effectsChanged = this.theme.update(now, this.effectsEnabled && !this.reducedMotion.matches);
+    this.lattice.update(now, this.effectsEnabled && !this.reducedMotion.matches);
     if (this.animationStart) {
       const t = Math.min((now - this.animationStart) / this.theme.motion.durationMs, 1);
       const ease = this.theme.motion.sample(t);
@@ -464,8 +467,9 @@ export class BoardView {
       this.scene.remove(piece.group); this.picks.remove(piece.proxy); piece.visual.dispose(); piece.label.element.remove();
     }
     this.pieces.clear(); this.scene.remove(this.theme.root); this.theme.postprocessing?.dispose(); this.theme.dispose();
-    this.theme = createTheme(id); this.scene.add(this.theme.root); this.scene.background = this.theme.background;
+    this.theme = createTheme(id); this.theme.stars?.setTwinkle(this.starTwinkle); this.scene.add(this.theme.root); this.scene.background = this.theme.background;
     this.scene.environment = this.theme.environment ?? null;
+    this.lattice.setFrosted(id === 'luminous' && this.frostedCells);
     if (this.theme.postprocessing?.preservePieceSilhouettes) this.camera.layers.enable(2);
     else this.camera.layers.disable(2);
     this.theme.postprocessing?.resize(this.host.clientWidth, this.host.clientHeight, this.renderer.getPixelRatio());
@@ -480,6 +484,15 @@ export class BoardView {
   setCrystalEffects(effects: CrystalEffects): void {
     this.theme.optical?.set(effects);
     this.renderSamples = []; this.dirty = true;
+  }
+
+  setFrostedCells(enabled: boolean): void {
+    this.frostedCells = enabled;
+    this.lattice.setFrosted(this.theme.id === 'luminous' && enabled); this.dirty = true;
+  }
+
+  setStarTwinkle(enabled: boolean): void {
+    this.starTwinkle = enabled; this.theme.stars?.setTwinkle(enabled); this.dirty = true;
   }
 
   setEffects(enabled: boolean): void {
@@ -504,7 +517,7 @@ export class BoardView {
 
   presentationMetrics() {
     const sorted = [...this.renderSamples].sort((a, b) => a - b);
-    return { theme: this.theme.id, lattice: this.lattice.metrics(), optical: this.theme.optical?.get() ?? null, director: this.director.mode, effects: this.effectsEnabled && !this.reducedMotion.matches,
+    return { theme: this.theme.id, starTwinkle: this.theme.stars?.getTwinkle() ?? null, lattice: this.lattice.metrics(), optical: this.theme.optical?.get() ?? null, director: this.director.mode, effects: this.effectsEnabled && !this.reducedMotion.matches,
       geometries: this.renderer.info.memory.geometries, textures: this.renderer.info.memory.textures,
       samples: sorted.length, medianSubmitMs: sorted[Math.floor(sorted.length / 2)] ?? 0,
       p95SubmitMs: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] ?? 0 };

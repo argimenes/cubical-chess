@@ -114,3 +114,61 @@ test('exports seven-view recognition sheets for both armies',async({page})=>{
     await page.locator('#recognition').evaluate(e=>e.remove());
   }
 });
+
+test('frosty star toggle preserves the game, survives theme switches and respects frozen animation',async({page})=>{
+  await page.locator('#theme').selectOption('luminous');
+  await page.locator('#piece-navigator').selectOption('3');
+  await page.locator('#lattice-mode').selectOption('adaptive');
+  await expect(page.locator('#star-twinkle')).not.toBeChecked();
+  const before=await page.evaluate(()=>({state:window.__cubical.snapshot(),field:window.__cubical.movementField(),save:localStorage.getItem('cubical-chess.active-game')}));
+  await page.locator('#ambient-effects').uncheck();
+  await page.screenshot({path:'docs/electric-stars-sharp.png'});
+  const baseline=await page.evaluate(()=>window.__cubical.metrics());
+  await page.locator('#star-twinkle').check();
+  await page.evaluate(()=>new Promise<void>(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>r()))));
+  expect((await page.evaluate(()=>window.__cubical.presentation())).starTwinkle).toBe(true);
+  expect((await page.evaluate(()=>window.__cubical.metrics())).drawCalls).toBe(baseline.drawCalls);
+  await page.screenshot({path:'docs/electric-stars-frost.png'});
+  let renders=await page.evaluate(()=>window.__cubical.metrics().renders);
+  await page.waitForTimeout(150);expect(await page.evaluate(()=>window.__cubical.metrics().renders)).toBe(renders);
+  expect(await page.evaluate(()=>({state:window.__cubical.snapshot(),field:window.__cubical.movementField(),save:localStorage.getItem('cubical-chess.active-game')}))).toEqual(before);
+  await page.locator('#theme').selectOption('diagnostic');await expect(page.locator('#luminous-options')).toBeHidden();
+  await page.locator('#theme').selectOption('luminous');await expect(page.locator('#star-twinkle')).toBeChecked();
+  expect((await page.evaluate(()=>window.__cubical.presentation())).starTwinkle).toBe(true);
+  await page.locator('#ambient-effects').check();
+  renders=await page.evaluate(()=>window.__cubical.metrics().renders);
+  await expect.poll(()=>page.evaluate(()=>window.__cubical.metrics().renders)).toBeGreaterThan(renders);
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.evaluate(()=>new Promise<void>(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>r()))));
+  renders=await page.evaluate(()=>window.__cubical.metrics().renders);
+  await page.waitForTimeout(150);expect(await page.evaluate(()=>window.__cubical.metrics().renders)).toBe(renders);
+  await page.locator('#star-twinkle').uncheck();
+  expect((await page.evaluate(()=>window.__cubical.presentation())).starTwinkle).toBe(false);
+});
+
+test('frosted cell lines preserve lattice preferences, game coordinates and capture picking',async({page})=>{
+  await page.locator('#setup').selectOption('spatial-study');await page.locator('#new-game').click();
+  await page.locator('#theme').selectOption('luminous');await page.locator('#lattice-mode').selectOption('structural');
+  await expect(page.locator('#frosted-cells')).not.toBeChecked();
+  const before=await page.evaluate(()=>({board:window.__cubical.snapshot().board,moves:window.__cubical.snapshot().moves,save:localStorage.getItem('cubical-chess.active-game'),points:window.__cubical.snapshot().moves.map(m=>window.__cubical.project(m.to))}));
+  await page.locator('#frosted-cells').check();
+  await page.locator('#ambient-effects').uncheck();
+  await page.evaluate(()=>new Promise<void>(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>r()))));
+  expect((await page.evaluate(()=>window.__cubical.presentation())).lattice).toMatchObject({mode:'structural',frostedCells:true});
+  await page.screenshot({path:'docs/electric-frosted-cells.png'});
+  expect(await page.evaluate(()=>({board:window.__cubical.snapshot().board,moves:window.__cubical.snapshot().moves,save:localStorage.getItem('cubical-chess.active-game'),points:window.__cubical.snapshot().moves.map(m=>window.__cubical.project(m.to))}))).toEqual(before);
+  let renders=await page.evaluate(()=>window.__cubical.metrics().renders);
+  await page.waitForTimeout(150);expect(await page.evaluate(()=>window.__cubical.metrics().renders)).toBe(renders);
+  await page.locator('#theme').selectOption('diagnostic');expect((await page.evaluate(()=>window.__cubical.presentation())).lattice.frostedCells).toBe(false);
+  await page.locator('#theme').selectOption('luminous');expect((await page.evaluate(()=>window.__cubical.presentation())).lattice.frostedCells).toBe(true);
+  await page.locator('#frosted-cells').uncheck();expect((await page.evaluate(()=>window.__cubical.presentation())).lattice).toMatchObject({mode:'structural',frostedCells:false});
+  await page.locator('#frosted-cells').check();await page.locator('#ambient-effects').check();
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.evaluate(()=>new Promise<void>(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>r()))));
+  renders=await page.evaluate(()=>window.__cubical.metrics().renders);
+  await page.waitForTimeout(150);expect(await page.evaluate(()=>window.__cubical.metrics().renders)).toBe(renders);
+  const target=348, p=await page.evaluate(c=>window.__cubical.project(c),target);
+  await page.mouse.click(p.x,p.y);
+  if(await page.locator('#depth-chooser').isVisible())await page.locator('#depth-options button').filter({hasText:'(4, 3, 5)'}).click();
+  expect((await page.evaluate(()=>window.__cubical.snapshot())).pieces[9].cell).toBeNull();
+});

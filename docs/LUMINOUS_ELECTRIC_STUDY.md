@@ -10,9 +10,17 @@ Choose **Luminous · electric space** under **View & guidance**. Try **Adaptive*
 
 The visual vocabulary takes the requested general direction—electric objects and sharp points of light suspended in darkness. It does not reproduce specific Sapphire & Steel title objects. There are no new raster assets, external textures or additional dependencies.
 
+## Star-sphere follow-up
+
+The board sits inside a radius-58 star sphere with no visible shell. Following visibility feedback, the field was increased from 480 through 1,400 to 3,200 points. A brighter tier of larger icy-white stars makes the surrounding space more apparent. Frost retains the static stars’ bright cores while adding twinkling spikes. **Frosty star twinkle** starts off, keeps its setting across theme switches during the page session and affects only Luminous stars. Ambient animation off or reduced motion freezes the effect while preserving its static appearance. Stars still use one draw call with no image texture or postprocessing target.
+
+[Sharp starfield](electric-stars-sharp.png) · [Frosty starfield](electric-stars-frost.png)
+
+The follow-up build and targeted browser check pass: toggling preserves game/save/field state and draw-call count, survives theme changes, animates when enabled and freezes under reduced motion or Ambient animation off. The timing table below predates the increased star count; this follow-up did not repeat the timing benchmark.
+
 ## Environment and pieces
 
-The environment is near-black with 480 small, fixed stars distributed well outside the board; only a sparse subset is visible in any view. Stars are sharp points without a bloom halo. There is no glass enclosure, volume refraction, dispersion pass or caustic surface in Luminous.
+The environment is near-black with 3,200 small stars distributed well outside the board; only a sparse subset is visible in any view. Stars are sharp points by default. The optional **Frosty star twinkle** switch adds small icy diffraction spikes and independently phased brightness changes to a subset of them, without full-screen bloom. There is no glass enclosure, volume refraction, dispersion pass or caustic surface in Luminous.
 
 Each piece combines an opaque faceted body, restrained edge definition and 24 small glint points sampled on its actual geometry. A surface shader creates localized white highlights, sapphire/cyan or ruby/red internal light bands, slow brightness variation and narrow angle-dependent prismatic flashes. Geometry remains fixed at its authoritative position: light activity never warps a piece or moves a hit target. All structural parts stay within the unchanged 0.34-unit picking sphere; a geometry-bound check covers every piece type and both armies.
 

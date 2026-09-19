@@ -46,7 +46,7 @@ The default renderer draws on changes and during camera/move animation. Destinat
 
 ## Theme and camera study
 
-**Diagnostic · clean lattice** remains the default. Choose **Luminous · electric space** for sapphire/cyan and ruby/red faceted pieces with localized electric light and scintillation against a near-black, sparse starfield. Gold legal destinations and amber captures keep their common styling.
+**Diagnostic · clean lattice** remains the default. Choose **Luminous · electric space** for sapphire/cyan and ruby/red faceted pieces with localized electric light and scintillation against a near-black, sparse starfield. Gold legal destinations and amber captures keep their common styling. The board hangs inside a surrounding star sphere; **Frosty star twinkle** adds icy, independently twinkling highlights. This switch starts off and is remembered across theme changes within the page. Ambient animation and reduced-motion settings freeze the twinkle.
 
 **Lattice display** is independent of theme: **Full** retains the analytical grid, **Structural** reduces it to structural plane cues, and **Adaptive** strengthens local cell context around selected pieces, legal destinations and inspected paths. Switching themes preserves that setting. Turn off **Ambient animation** for static rendering.
 

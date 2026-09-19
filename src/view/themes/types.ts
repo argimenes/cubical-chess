@@ -30,6 +30,7 @@ export interface ThemeRuntime {
   /** Optional contrast backing for the common destination field; never changes hit targets. */
   readonly markerBackdrop?: number;
   readonly postprocessing?: PresentationPass;
+  readonly stars?: { setTwinkle(enabled: boolean): void; getTwinkle(): boolean };
   readonly optical?: { set(effects: CrystalEffects): void; get(): CrystalEffects };
   createPiece(piece: PieceAppearance): PieceVisual;
   onCue(cue: SceneCue, time: number): void;
