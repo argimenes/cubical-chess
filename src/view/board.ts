@@ -74,6 +74,8 @@ export class BoardView {
   private gestureSuppressed = false;
   private dirty = true;
   private animationStart = 0;
+  private animationDuration = 0;
+  private animationPausedAt: number | null = null;
   private animationFrame = 0;
   private lastRender = 0;
   private renders = 0;
@@ -162,9 +164,11 @@ export class BoardView {
     return { visual, group, label, proxy, target, start: target.clone() };
   }
 
-  setState(state: ScenePosition, animate = false): void {
+  setState(state: ScenePosition, animate = false, durationMs = this.theme.motion.durationMs): void {
     this.director.interrupt();
     this.theme.clearTransient();
+    // Promotion replaces the visual, but must retain the source of its movement.
+    const starts = new Map([...this.pieces].map(([id, view]) => [id, view.group.position.clone()]));
     this.state = Object.freeze({ pieces: Object.freeze(state.pieces.map(piece => Object.freeze({ ...piece }))) });
     for (const [id, view] of this.pieces) {
       const piece = state.pieces[id];
@@ -176,12 +180,17 @@ export class BoardView {
     for (const piece of state.pieces) {
       if (piece.cell === null) continue;
       let view = this.pieces.get(piece.id);
-      if (!view) { view = this.createPiece(piece); this.pieces.set(piece.id, view); }
+      if (!view) {
+        view = this.createPiece(piece); this.pieces.set(piece.id, view);
+        if (animate && starts.has(piece.id)) view.group.position.copy(starts.get(piece.id)!);
+      }
       view.start.copy(view.group.position); view.target.copy(world(piece.cell));
       view.proxy.position.copy(view.target); view.proxy.userData.cell = piece.cell;
       if (!animate) view.group.position.copy(view.target);
     }
     this.animationStart = animate && !this.reducedMotion.matches ? performance.now() : 0;
+    this.animationDuration = Math.max(1, durationMs);
+    this.animationPausedAt = null;
     if (!this.animationStart) for (const view of this.pieces.values()) view.group.position.copy(view.target);
     this.applyVisibility();
     this.dirty = true;
@@ -380,6 +389,20 @@ export class BoardView {
 
   get isAnimating(): boolean { return this.animationStart !== 0; }
 
+  setAnimationPaused(paused: boolean): void {
+    if (!this.animationStart) return;
+    if (paused && this.animationPausedAt === null) this.animationPausedAt = performance.now();
+    else if (!paused && this.animationPausedAt !== null) {
+      this.animationStart += performance.now() - this.animationPausedAt;
+      this.animationPausedAt = null;
+    }
+  }
+
+  animationSnapshot() {
+    return { active: this.isAnimating, paused: this.animationPausedAt !== null,
+      pieces: [...this.pieces].map(([id, view]) => ({ id, position: view.group.position.toArray(), target: view.target.toArray() })) };
+  }
+
   preset(name: CameraPreset): void {
     this.director.interrupt();
     const aspect = this.camera.aspect;
@@ -426,8 +449,8 @@ export class BoardView {
     const moved = this.controls.update();
     const effectsChanged = this.theme.update(now, this.effectsEnabled && !this.reducedMotion.matches);
     this.lattice.update(now, this.effectsEnabled && !this.reducedMotion.matches);
-    if (this.animationStart) {
-      const t = Math.min((now - this.animationStart) / this.theme.motion.durationMs, 1);
+    if (this.animationStart && this.animationPausedAt === null) {
+      const t = this.reducedMotion.matches ? 1 : Math.min((now - this.animationStart) / this.animationDuration, 1);
       const ease = this.theme.motion.sample(t);
       for (const view of this.pieces.values()) view.group.position.lerpVectors(view.start, view.target, ease);
       if (t === 1) this.animationStart = 0;

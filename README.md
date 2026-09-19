@@ -63,6 +63,18 @@ The active game saves automatically in browser localStorage after each move, pro
 
 **Reset game** asks for confirmation, then restarts the currently loaded position with its current pawn profile and clears its move history. **Load position** also asks before replacing a game with played moves. Cancel or Escape keeps the game. The save status below these controls reports storage failures; play can continue in memory if storage is unavailable.
 
+**Save game** downloads the active game as `YYYYMMDD-HHMMSS.chess3.json`, using your device’s local date and time. **Load game** opens a file picker and restores the saved setup, pawn profile, board, turn, full move history and undo capability. Loading over a game with played moves asks for confirmation; Cancel or Escape keeps the current game. Imported games become the browser’s active autosave. Invalid, incompatible or illegal files leave your current game and autosave unchanged. File saving and loading also work when browser storage is unavailable. Visual settings are not included.
+
+### Game replay
+
+The **Move record** controls replay the current game or a game loaded from a JSON file:
+
+- **Jump to start** (⏮), **Previous move** (◀) and **Next move** (▶) inspect recorded positions.
+- **Play / Pause** runs the moves automatically, animating pieces in the cube. Pause freezes an in-flight movement; Play resumes it. Play from the present or a completed replay starts again from the beginning.
+- **Back to present** exits replay and restores the live position for play. The current recorded move is highlighted.
+
+Replay is read-only and uses a separate position: the live board, move history, undo and browser autosave stay intact. **Save game** still exports the complete live game. Camera, theme and lattice controls remain available. Replay shows all levels on entry so an isolated slice cannot hide the moves. Loading/resetting a game ends replay; reloading the page returns to the saved present. Switching away from the tab pauses playback. Reduced-motion preferences use immediate position changes instead of piece travel.
+
 Records carry schema and rules versions and are validated by replay through the rules engine. An unreadable or incompatible save is reported and left intact until the next game change. Browser save archives, final multidirectional piece designs, a Web Worker computer opponent, threat/ghost overlays, and online play remain later stages in the [approved plan](THREE_DIMENSIONAL_CHESS_PLAN.md).
 
 See the [slice report](docs/PROTOTYPE_1_RESULTS.md) for verification, measurements, and issues to carry into the next stage.

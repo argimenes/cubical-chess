@@ -9,6 +9,13 @@ const RULES_VERSION = 1;
 export interface HistoryEntry { undo: UndoRecord; label: string; owner: PlayerId }
 export interface RestoredGame { setup: SetupId; state: GameState; history: HistoryEntry[] }
 
+/** Local calendar time, matching the date the player sees on their device. */
+export function gameFileName(date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return String(date.getFullYear()).padStart(4, '0') + pad(date.getMonth() + 1) + pad(date.getDate())
+    + '-' + pad(date.getHours()) + pad(date.getMinutes()) + pad(date.getSeconds()) + '.chess3.json';
+}
+
 export function moveLabel(type: PieceType, move: Move): string {
   return PIECE_LETTERS[type] + ' ' + formatCell(move.from)
     + (move.capturedId !== null ? ' × ' : ' → ') + formatCell(move.to)

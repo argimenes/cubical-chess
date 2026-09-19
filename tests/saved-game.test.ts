@@ -1,8 +1,13 @@
 import { expect, it } from 'vitest';
-import { decodeGame, encodeGame, moveLabel, type HistoryEntry } from '../src/app/saved-game';
+import { decodeGame, encodeGame, gameFileName, moveLabel, type HistoryEntry } from '../src/app/saved-game';
 import { commitMove, legalMoves, sideToMove, unmakeMove } from '../src/rules/engine';
 import { cell } from '../src/rules/geometry';
 import { createSetup, type SetupId } from '../src/rules/setups';
+
+it('names game files using zero-padded local date and time', () => {
+  expect(gameFileName(new Date(2026, 0, 2, 3, 4, 5))).toBe('20260102-030405.chess3.json');
+  expect(gameFileName(new Date(2026, 11, 31, 23, 59, 59))).toBe('20261231-235959.chess3.json');
+});
 
 it.each(['outer-planes', 'spatial-study', 'king-safety', 'promotion'] as SetupId[])('round-trips %s, including complete history and undo state', setup => {
   const state = createSetup(setup, 'prototype-1-three');

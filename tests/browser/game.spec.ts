@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { GameStatus, Move, Piece } from '../../src/rules/types';
 
 interface Diagnostics {
+  replay(): { active: boolean; playing: boolean; cursor: number; length: number; pieces: Piece[]; board: number[]; animation: { active: boolean; paused: boolean; pieces: { id: number; position: number[]; target: number[] }[] } };
   snapshot(): { pieces: Piece[]; board: number[]; side: string; ply: number; selected: number | null; moves: Move[]; status: GameStatus; history: string[]; generationMs: number };
   project(cell: number): { x: number; y: number };
   metrics(): { drawCalls: number; triangles: number; lastRenderMs: number; renders: number };

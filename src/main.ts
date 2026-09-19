@@ -1,6 +1,7 @@
 import './style.css';
-import { decodeGame, encodeGame, moveLabel, SAVE_KEY, type HistoryEntry } from './app/saved-game';
+import { decodeGame, encodeGame, gameFileName, moveLabel, SAVE_KEY, type HistoryEntry, type RestoredGame } from './app/saved-game';
 import { inspectCheck } from './app/inspect-move';
+import { GameReplay } from './app/replay';
 import { commitMove, gameStatus, isInCheck, legalMoves, pieceAt, sideToMove, unmakeMove } from './rules/engine';
 import { coordinates, formatCell } from './rules/geometry';
 import { createSetup, SETUPS, type SetupId } from './rules/setups';
@@ -26,9 +27,18 @@ app.innerHTML = `
       <section class="panel-section setup-section"><label class="section-title" for="setup">POSITION</label>
         <select id="setup">${SETUPS.map(s => '<option value="' + s.id + '">' + s.name + '</option>').join('')}</select>
         <label class="field-label" for="profile">Pawn experiment</label><select id="profile"><option value="prototype-1">4 directions / 8 captures</option><option value="prototype-1-three">3 directions / 6 captures</option></select>
-        <button id="new-game" class="secondary-button full-width">Load position <span>↗</span></button><button id="reset-game" class="secondary-button full-width">Reset game</button><p id="save-status" class="muted small" role="status">Autosave ready</p><p id="setup-description" class="muted small"></p>
+        <button id="new-game" class="secondary-button full-width">Load position <span>↗</span></button><button id="reset-game" class="secondary-button full-width">Reset game</button>
+        <div class="game-file-actions"><button id="export-game" class="secondary-button">Save game</button><button id="import-game" class="secondary-button">Load game</button></div>
+        <input id="game-file" type="file" accept=".chess3.json,.json,application/json" hidden />
+        <p id="file-status" class="muted small" role="status" hidden></p>
+        <p id="save-status" class="muted small" role="status">Autosave ready</p><p id="setup-description" class="muted small"></p>
       </section>
       <section class="panel-section history-section"><div class="section-title">MOVE RECORD <span id="move-count" class="mono">0 PLY</span></div>
+        <div class="replay-controls" role="group" aria-label="Game replay">
+          <div class="replay-buttons"><button id="replay-start" class="secondary-button" aria-label="Jump to start" title="Jump to start">⏮</button><button id="replay-back" class="secondary-button" aria-label="Previous move" title="Previous move">◀</button><button id="replay-play" class="secondary-button" aria-label="Play replay">Play</button><button id="replay-next" class="secondary-button" aria-label="Next move" title="Next move">▶</button></div>
+          <button id="replay-present" class="secondary-button full-width" disabled>Back to present</button>
+          <p id="replay-status" class="muted small" role="status">Play a move to begin replay.</p>
+        </div>
         <div id="history" class="history" aria-label="Move history"><p class="empty-history">A new dimension.<br>Your first move.</p></div>
         <button id="undo" class="secondary-button full-width" disabled>↶ <span>Undo move</span></button>
       </section>
@@ -78,8 +88,9 @@ app.innerHTML = `
   </main>
   <footer class="app-footer"><span><span class="footer-dot"></span> PROTOTYPE-1 <span class="footer-separator">·</span> LOCAL PLAY</span><span class="mouse-help">Drag to orbit · Scroll to zoom · Right-drag to pan</span><span class="touch-help">Drag to orbit · Pinch to zoom · Two fingers to pan</span><span id="notice" role="status" aria-live="polite">Ready to explore</span></footer>
   <dialog id="reset-dialog" aria-labelledby="reset-title" aria-describedby="reset-detail"><div class="dialog-kicker">START AGAIN</div><h2 id="reset-title">Reset this game?</h2><p id="reset-detail"></p><div class="reset-actions"><button id="cancel-reset" class="secondary-button" autofocus>Keep playing</button><button id="confirm-reset" class="primary-button">Reset game</button></div></dialog>
+  <dialog id="import-dialog" aria-labelledby="import-title" aria-describedby="import-detail"><div class="dialog-kicker">LOAD GAME FILE</div><h2 id="import-title">Replace this game?</h2><p id="import-detail"></p><p>This replaces the current board, move history and automatic save. Use Save game first if you want to keep the current game.</p><div class="reset-actions"><button id="cancel-import" class="secondary-button" autofocus>Keep playing</button><button id="confirm-import" class="primary-button">Load game</button></div></dialog>
   <dialog id="promotion-dialog"><div class="dialog-kicker">THE FAR HOME PLANE</div><h2>Choose your promotion</h2><p>Your pawn has reached the opposing home plane.</p><div class="promotion-options">${(['queen', 'rook', 'bishop', 'knight'] as const).map(type => '<button data-promote="' + type + '"><strong>' + PIECE_LETTERS[type] + '</strong><span>' + type + '</span></button>').join('')}</div><button id="cancel-promotion" class="secondary-button">Cancel move</button></dialog>
-  <dialog id="help-dialog"><div class="dialog-kicker">WELCOME TO CUBICAL</div><h2>Find the move in the volume.</h2><p>White starts on Z = 0. Black starts on Z = 7. Select a piece to see its complete movement constellation. Hover a destination, or focus its button, to inspect one path. Gold markers indicate legal destinations; larger amber markers indicate captures. Click or press Enter to commit. On touchscreens, tap a destination to inspect it, then tap it again to move.</p><p>Drag to orbit; scroll or pinch to zoom. Use the camera presets to look through another face. When cells overlap, a depth chooser lets you select the exact coordinate. The piece navigator and destination list also work with a keyboard.</p><p>Four-direction pawns move into empty cells along ±Y or ±Z. They capture on X–Y or X–Z diagonals. A pawn reaches promotion at the opposite home Z plane.</p><p>A dashed knight guide illustrates just the inspected jump. Intervening cells do not block it. Moves exposing your king are excluded. The inspector can indicate a prospective check without changing the game.</p><p class="muted">Local two-player play and simple spatial symbols. Your game and move history are saved automatically in this browser and restored on reload. Reset game starts the current position again after confirmation. Computer play, final piece designs and saved-game archives come in later stages.</p><button id="close-help" class="primary-button">Enter the cube</button></dialog>
+  <dialog id="help-dialog"><div class="dialog-kicker">WELCOME TO CUBICAL</div><h2>Find the move in the volume.</h2><p>White starts on Z = 0. Black starts on Z = 7. Select a piece to see its complete movement constellation. Hover a destination, or focus its button, to inspect one path. Gold markers indicate legal destinations; larger amber markers indicate captures. Click or press Enter to commit. On touchscreens, tap a destination to inspect it, then tap it again to move.</p><p>Drag to orbit; scroll or pinch to zoom. Use the camera presets to look through another face. When cells overlap, a depth chooser lets you select the exact coordinate. The piece navigator and destination list also work with a keyboard.</p><p>Four-direction pawns move into empty cells along ±Y or ±Z. They capture on X–Y or X–Z diagonals. A pawn reaches promotion at the opposite home Z plane.</p><p>A dashed knight guide illustrates just the inspected jump. Intervening cells do not block it. Moves exposing your king are excluded. The inspector can indicate a prospective check without changing the game.</p><p class="muted">Local two-player play and simple spatial symbols. Your game and move history are saved automatically in this browser and restored on reload. Save game downloads a JSON file; Load game restores its board and complete move history. Use the Move record controls to step through or play a replay. Pause stops the animation; Back to present restores live play. Replay never changes your saved game. Reset game starts the current position again after confirmation. Computer play and final piece designs come in later stages.</p><button id="close-help" class="primary-button">Enter the cube</button></dialog>
 `;
 
 const element = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -90,12 +101,18 @@ let selected: number | null = null;
 let available: Move[] = [];
 const history: HistoryEntry[] = [];
 let pendingReset: { setup: SetupId; profile: ProfileId } | null = null;
+let pendingImport: { game: RestoredGame; name: string } | null = null;
 let promotionMoves: Move[] = [];
 let lastGenerationMs = 0;
 let inspectedCell: Cell | null = null;
 let armedTouchCell: Cell | null = null;
 const inspectionCache = new Map<Cell, ReturnType<typeof inspectCheck>>();
 let view: BoardView;
+let replay: GameReplay | null = null;
+let replayPlaying = false;
+let replayFrame = 0;
+let nextReplayAt = 0;
+const displayedState = () => replay?.state ?? state;
 const pieceRules: Record<PieceType, string> = {
   pawn: 'Move one empty cell along ±Y or ±Z. Capture diagonally in X–Y or X–Z. Change X only by capturing. Promote on the opposite home Z plane.',
   rook: 'Slide along one axis: X, Y or Z. Six rays. The first occupied cell stops the ray.',
@@ -109,6 +126,7 @@ const visualPoint = (cell: Cell): Point3 => { const [x, y, z] = coordinates(cell
 function announce(text: string): void { element('notice').textContent = text; }
 function closeDepth(): void { element('depth-chooser').hidden = true; }
 function setHover(cell: Cell | null, restoreFocus = true): void {
+  const state = displayedState();
   if (cell === null && restoreFocus) {
     const focused = (document.activeElement as HTMLElement | null)?.dataset.inspectCell;
     if (focused !== undefined && available.some(m => m.to === Number(focused))) cell = Number(focused);
@@ -141,6 +159,7 @@ function setHover(cell: Cell | null, restoreFocus = true): void {
     element('move-detail').textContent = details.join(' ');
     element('instruction').textContent = action + (captured ? ' · capture ' + captured.type : '') + (check === 'yes' ? ' · gives check' : '') + (armedTouchCell === cell ? ' · tap again to move' : ' · click or Enter to move');
   }
+  if (replay) element('instruction').textContent = 'REPLAY · ' + replay.cursor + ' / ' + replay.length + ' · Return to present to play.';
   document.querySelectorAll<HTMLButtonElement>('.destination').forEach(button => button.classList.toggle('inspected', !!move && Number(button.dataset.inspectCell) === cell));
 }
 
@@ -155,12 +174,13 @@ function bindInspection(button: HTMLButtonElement, cell: Cell): void {
 }
 
 function selectPiece(id: number | null): void {
+  const state = displayedState();
   closeDepth(); clearPreview(); inspectionCache.clear(); selected = id;
   if (id !== null && element<HTMLInputElement>('isolate').checked) {
     element<HTMLSelectElement>('plane').value = String(coordinates(state.pieces[id].cell!)[2]); updateOptions();
   }
   const start = performance.now();
-  available = id === null || gameStatus(state).kind !== 'playing' ? [] : legalMoves(state, id);
+  available = replay || id === null || gameStatus(state).kind !== 'playing' ? [] : legalMoves(state, id);
   lastGenerationMs = performance.now() - start;
   view.setSelection(selected, available);
   renderInspector();
@@ -169,6 +189,7 @@ function selectPiece(id: number | null): void {
 }
 
 function selectCell(cell: Cell, input: SelectionInput = 'pointer'): void {
+  const state = displayedState();
   if (view.isAnimating) return;
   closeDepth();
   const candidates = available.filter(m => m.to === cell);
@@ -188,6 +209,7 @@ function selectCell(cell: Cell, input: SelectionInput = 'pointer'): void {
 }
 
 function play(move: Move): void {
+  if (replay) { announce('Return to present to play a move.'); return; }
   const piece = state.pieces[move.pieceId];
   const owner = piece.owner;
   const label = moveLabel(piece.type, move);
@@ -215,6 +237,7 @@ function play(move: Move): void {
 }
 
 function renderInspector(): void {
+  const state = displayedState();
   const piece = selected === null ? null : state.pieces[selected];
   element<HTMLSelectElement>('piece-navigator').value = piece ? String(piece.id) : '';
   element<HTMLButtonElement>('focus-piece').disabled = !piece;
@@ -230,7 +253,7 @@ function renderInspector(): void {
   const destinations = element('destinations'); destinations.replaceChildren();
   if (!moves.length) {
     const p = document.createElement('p'); p.className = 'muted small';
-    p.textContent = !piece ? 'Select a piece to illuminate its legal moves.' : piece.owner !== sideToMove(state) ? 'Inspecting the opponent. Select a ' + sideToMove(state) + ' piece to move.' : 'No legal moves. Moving this piece may expose your king.';
+    p.textContent = replay ? 'Replay is read-only. Return to present to play.' : !piece ? 'Select a piece to illuminate its legal moves.' : piece.owner !== sideToMove(state) ? 'Inspecting the opponent. Select a ' + sideToMove(state) + ' piece to move.' : 'No legal moves. Moving this piece may expose your king.';
     destinations.append(p);
   }
   for (const move of moves) {
@@ -246,6 +269,7 @@ function renderInspector(): void {
 }
 
 function render(): void {
+  const state = displayedState();
   const status = gameStatus(state);
   const owner = sideToMove(state);
   element('turn-card').className = 'turn-card ' + owner;
@@ -254,7 +278,7 @@ function render(): void {
   element('turn-card').classList.toggle('in-check', status.kind === 'playing' && status.check);
   element('piece-count').textContent = String(state.pieces.filter(p => p.cell !== null).length);
   element('move-count').textContent = state.ply + ' PLY';
-  element<HTMLButtonElement>('undo').disabled = !history.length;
+  element<HTMLButtonElement>('undo').disabled = !!replay || !history.length;
   const navigator = element<HTMLSelectElement>('piece-navigator');
   navigator.replaceChildren(new Option('Select on the cube', ''));
   for (const piece of state.pieces.filter(p => p.cell !== null)) navigator.add(new Option(title(piece.owner) + ' ' + piece.type + ' ' + formatCell(piece.cell!), String(piece.id)));
@@ -264,19 +288,123 @@ function render(): void {
     const row = document.createElement('div'); row.className = 'move-row ' + entry.owner;
     const number = document.createElement('span'); number.className = 'move-number'; number.textContent = String(index + 1).padStart(2, '0');
     const text = document.createElement('span'); text.textContent = entry.label;
+    row.classList.toggle('replay-current', !!replay && index === replay.cursor - 1);
+    row.classList.toggle('replay-future', !!replay && index >= replay.cursor);
+    if (replay && index === replay.cursor - 1) row.setAttribute('aria-current', 'step');
     row.append(number, text); log.append(row);
   });
-  log.scrollTop = log.scrollHeight;
+  const currentRow = log.querySelector<HTMLElement>('[aria-current]');
+  log.scrollTop = replay ? currentRow ? currentRow.offsetTop - log.offsetTop : 0 : log.scrollHeight;
   const setupData = SETUPS.find(s => s.id === setup)!;
   element('setup-description').textContent = setupData.description;
   element('stage-description').textContent = setupData.name + ' · ' + PROFILES[state.profile].name.toLowerCase();
   renderInspector();
+  renderReplay();
 }
+
+function renderReplay(): void {
+  const cursor = replay?.cursor ?? history.length;
+  element<HTMLButtonElement>('replay-start').disabled = !history.length || cursor === 0;
+  element<HTMLButtonElement>('replay-back').disabled = !history.length || cursor === 0;
+  element<HTMLButtonElement>('replay-next').disabled = !replay || cursor === history.length;
+  element<HTMLButtonElement>('replay-present').disabled = !replay;
+  const playButton = element<HTMLButtonElement>('replay-play');
+  playButton.disabled = !history.length;
+  playButton.textContent = replayPlaying ? 'Pause' : 'Play';
+  playButton.setAttribute('aria-label', replayPlaying ? 'Pause replay' : 'Play replay');
+  element('replay-status').textContent = !history.length ? 'Play a move to begin replay.' : replay
+    ? (replayPlaying ? 'Playing' : cursor === history.length && !view.isAnimating ? 'Replay complete' : 'Paused') + ' · ' + cursor + ' / ' + history.length
+      + (cursor ? ' · ' + history[cursor - 1].label : ' · Starting position')
+    : 'Present · ' + history.length + ' moves';
+  element('board').classList.toggle('replaying', !!replay);
+  if (replay) {
+    element('instruction').textContent = 'REPLAY · ' + cursor + ' / ' + history.length + ' · Return to present to play.';
+    element('stage-description').textContent = 'Replay · ' + SETUPS.find(s => s.id === setup)!.name;
+  }
+}
+
+function pauseReplay(): void {
+  replayPlaying = false;
+  cancelAnimationFrame(replayFrame);
+  replayFrame = 0;
+  if (replay) view.setAnimationPaused(true);
+  renderReplay();
+}
+
+function clearReplay(): void {
+  replayPlaying = false;
+  cancelAnimationFrame(replayFrame);
+  replayFrame = 0;
+  replay = null;
+  view?.setAnimationPaused(false);
+}
+
+function showReplay(index: number, animate = false): void {
+  if (!history.length) return;
+  if (!replay) {
+    replay = new GameReplay(state, history);
+    // A previously isolated level must not hide the replay's moves.
+    element<HTMLSelectElement>('plane').value = 'all';
+    element<HTMLInputElement>('isolate').checked = false;
+  }
+  const before = replay.cursor;
+  replay.seek(index);
+  selected = null; available = []; inspectionCache.clear(); clearPreview(); closeDepth();
+  view.setState(replay.state, animate, 850);
+  view.setSelection(null, []);
+  updateOptions(); render();
+  if (animate && index === before + 1) {
+    const { undo: { move }, owner } = history[index - 1];
+    const at = visualPoint(move.to), from = visualPoint(move.from);
+    view.present({ kind: 'move', at, from, owner });
+    if (move.capturedId !== null) view.present({ kind: 'capture', at, from, owner });
+    if (isInCheck(replay.state, sideToMove(replay.state))) {
+      const king = replay.state.pieces.find(p => p.type === 'king' && p.owner === sideToMove(replay!.state))!;
+      view.present({ kind: 'check', at: visualPoint(king.cell!) });
+    }
+    view.present({ kind: 'position', at });
+  }
+}
+
+function replayTick(now: number): void {
+  if (!replayPlaying || !replay) return;
+  if (!view.isAnimating && now >= nextReplayAt) {
+    if (replay.cursor === replay.length) { pauseReplay(); return; }
+    showReplay(replay.cursor + 1, true);
+    nextReplayAt = now + 1500;
+  }
+  replayFrame = requestAnimationFrame(replayTick);
+}
+
+element('replay-start').addEventListener('click', () => { pauseReplay(); showReplay(0); });
+element('replay-back').addEventListener('click', () => {
+  pauseReplay(); showReplay(Math.max(0, (replay?.cursor ?? history.length) - 1), true);
+});
+element('replay-next').addEventListener('click', () => {
+  pauseReplay(); if (replay) showReplay(Math.min(replay.length, replay.cursor + 1), true);
+});
+element('replay-play').addEventListener('click', () => {
+  if (replayPlaying) { pauseReplay(); return; }
+  if (!history.length) return;
+  if (!replay || (replay.cursor === replay.length && !view.isAnimating)) showReplay(0);
+  replayPlaying = true;
+  view.setAnimationPaused(false);
+  nextReplayAt = performance.now() + 600;
+  renderReplay();
+  replayFrame = requestAnimationFrame(replayTick);
+});
+element('replay-present').addEventListener('click', () => {
+  clearReplay(); selected = null; available = []; inspectionCache.clear(); clearPreview(); closeDepth();
+  view.setState(state); view.setSelection(null, []); render(); updateOptions();
+  announce('Back to present. ' + title(sideToMove(state)) + ' to play.');
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden && replay) pauseReplay(); });
 
 try {
   view = new BoardView(element('board'), {
     select: selectCell, hover: setHover, gesture: closeDepth, navigate: clearPreview,
     chooseDepth: (cells, x, y, input) => {
+      const state = displayedState();
       const chooser = element('depth-chooser'); const options = element('depth-options'); options.replaceChildren();
       for (const cell of cells) {
         const piece = pieceAt(state, cell);
@@ -330,6 +458,7 @@ function restoreGame(): void {
 }
 
 function startGame(nextSetup: SetupId, profile: ProfileId): void {
+  clearReplay();
   setup = nextSetup;
   state = createSetup(setup, profile); history.length = 0; selected = null; available = []; promotionMoves = [];
   element<HTMLSelectElement>('setup').value = setup;
@@ -341,11 +470,92 @@ function startGame(nextSetup: SetupId, profile: ProfileId): void {
   announce('Loaded ' + SETUPS.find(s => s.id === setup)!.name.toLowerCase());
 }
 function confirmReset(nextSetup: SetupId, profile: ProfileId): void {
+  pauseReplay();
   pendingReset = { setup: nextSetup, profile };
   element('reset-detail').textContent = 'Start ' + SETUPS.find(s => s.id === nextSetup)!.name.toLowerCase()
     + ' again with ' + PROFILES[profile].name.toLowerCase() + '? This replaces the current board, move history and automatic save.';
   element<HTMLDialogElement>('reset-dialog').showModal();
 }
+
+function fileStatus(message: string, error = false): void {
+  const status = element('file-status');
+  status.hidden = false;
+  status.textContent = message;
+  status.classList.toggle('save-error', error);
+}
+
+function importGame(saved: RestoredGame, name: string): void {
+  clearReplay();
+  setup = saved.setup; state = saved.state;
+  history.length = 0;
+  for (const entry of saved.history) history.push(entry);
+  selected = null; available = []; promotionMoves = [];
+  element<HTMLSelectElement>('setup').value = setup;
+  element<HTMLSelectElement>('profile').value = state.profile;
+  element<HTMLSelectElement>('plane').value = 'all';
+  element<HTMLInputElement>('isolate').checked = false;
+  inspectionCache.clear(); clearPreview(); closeDepth();
+  view.director.interrupt(); view.setState(state); view.setSelection(null, []);
+  render(); updateOptions(); autosave();
+  fileStatus('Loaded ' + name + ' · ' + history.length + ' moves.');
+  announce('Game loaded. ' + title(sideToMove(state)) + ' to play.');
+}
+
+element('export-game').addEventListener('click', () => {
+  try {
+    // Export live state, even when localStorage is blocked or out of space.
+    const blob = new Blob([encodeGame(setup, state.profile, history)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = gameFileName();
+    document.body.append(link);
+    try { link.click(); fileStatus('Download started: ' + link.download); }
+    finally {
+      link.remove();
+      // Allow the browser to start reading the download before releasing its URL.
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+  } catch { fileStatus('Could not download the game. Please try again.', true); }
+});
+
+element('import-game').addEventListener('click', () => { pauseReplay(); element<HTMLInputElement>('game-file').click(); });
+element('game-file').addEventListener('change', async () => {
+  const input = element<HTMLInputElement>('game-file');
+  const file = input.files?.[0];
+  input.value = ''; // The same file can be selected again after cancelling or an error.
+  if (!file) return;
+  const button = element<HTMLButtonElement>('import-game');
+  button.disabled = true;
+  fileStatus('Reading ' + file.name + '…');
+  let saved: RestoredGame;
+  try {
+    // Replay into a separate state; failed validation cannot alter the active game.
+    saved = decodeGame(await file.text());
+  } catch {
+    fileStatus('Could not load this file. Choose a valid, compatible .chess3.json game. Your current game is unchanged.', true);
+    return;
+  } finally { button.disabled = false; }
+  if (history.length) {
+    pendingImport = { game: saved, name: file.name };
+    element('import-detail').textContent = file.name + ' · ' + SETUPS.find(s => s.id === saved.setup)!.name
+      + ' · ' + saved.history.length + ' moves · ' + title(sideToMove(saved.state)) + ' to play.';
+    fileStatus('Game file ready. Confirm loading or keep playing.');
+    element<HTMLDialogElement>('import-dialog').showModal();
+  } else importGame(saved, file.name);
+});
+element('cancel-import').addEventListener('click', () => element<HTMLDialogElement>('import-dialog').close());
+element('import-dialog').addEventListener('close', () => {
+  if (pendingImport) fileStatus('Load cancelled. Your current game is unchanged.');
+  pendingImport = null;
+});
+element('confirm-import').addEventListener('click', () => {
+  if (!pendingImport) return;
+  const next = pendingImport;
+  pendingImport = null;
+  element<HTMLDialogElement>('import-dialog').close();
+  importGame(next.game, next.name);
+});
+
 element('new-game').addEventListener('click', () => {
   const nextSetup = element<HTMLSelectElement>('setup').value as SetupId;
   const profile = element<HTMLSelectElement>('profile').value as ProfileId;
@@ -363,11 +573,13 @@ element('confirm-reset').addEventListener('click', () => {
   startGame(next.setup, next.profile);
 });
 element('undo').addEventListener('click', () => {
+  if (replay) return;
   const entry = history.pop(); if (!entry) return;
   unmakeMove(state, entry.undo); autosave(); selected = null; available = [];
   inspectionCache.clear(); view.setState(state); view.setSelection(null, []); clearPreview(); render(); announce('Move undone. ' + title(sideToMove(state)) + ' to play.');
 });
 function updateOptions(): void {
+  const state = displayedState();
   let plane = element<HTMLSelectElement>('plane').value;
   const isolate = element<HTMLInputElement>('isolate').checked;
   if (isolate && plane === 'all') { plane = selected === null ? '0' : String(coordinates(state.pieces[selected].cell!)[2]); element<HTMLSelectElement>('plane').value = plane; }
@@ -428,10 +640,11 @@ if (import.meta.env.DEV) {
   Object.assign(window, { __cubical: {
     snapshot: () => ({ pieces: state.pieces.map(p => ({ ...p })), board: Array.from(state.board), side: sideToMove(state), ply: state.ply, profile: state.profile, selected, moves: available.map(m => ({ ...m })), status: gameStatus(state), inCheck: isInCheck(state, sideToMove(state)), history: history.map(h => h.label), generationMs: lastGenerationMs }),
     project: (cell: Cell) => view.project(cell),
+    replay: () => ({ active: !!replay, playing: replayPlaying, cursor: replay?.cursor ?? history.length, length: history.length, pieces: displayedState().pieces.map(p => ({ ...p })), board: Array.from(displayedState().board), animation: view.animationSnapshot() }),
     metrics: () => ({ ...view.metrics }),
     movementField: () => ({ ...view.movementField(), inspectedCell }),
     camera: () => view.camera.position.toArray(),
     presentation: () => ({ ...view.presentationMetrics(), target: view.controls.target.toArray() }),
   } });
 }
-window.addEventListener('pagehide', event => { if (!event.persisted) view?.dispose(); });
+window.addEventListener('pagehide', event => { pauseReplay(); if (!event.persisted) view?.dispose(); });
