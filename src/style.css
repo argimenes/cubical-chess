@@ -118,3 +118,6 @@ dialog { max-width: 490px; width: calc(100% - 40px); background: #101c29; color:
 #crystal-options { margin: 12px 0; padding: 8px 0; border: 0; border-top: 1px solid var(--line); }
 #crystal-options legend { font-size: 10px; color: #8dabc0; padding: 0 6px 0 0; }
 #crystal-options p { line-height: 1.5; }
+
+.field-legend { flex-wrap: wrap; row-gap: 8px; }
+.field-legend i.silver { background: #d7e4f0; }

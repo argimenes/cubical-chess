@@ -40,6 +40,10 @@ export class BoardView {
   private readonly labels = new CSS2DRenderer();
   private readonly pieces = new Map<number, PieceView>();
   private readonly assists = new THREE.Group();
+  private readonly continuation = new THREE.Group();
+  private continuationOrigin: Cell | null = null;
+  private continuationMoves: readonly Move[] = [];
+  private continuationCells: Cell[] = [];
   private readonly guide = new THREE.Group();
   private readonly focusOutline: THREE.LineSegments;
   private markers: THREE.InstancedMesh | null = null;
@@ -104,7 +108,7 @@ export class BoardView {
     this.controls.minPolarAngle = 0.001;
     this.controls.maxPolarAngle = Math.PI - 0.001;
     this.controls.addEventListener('change', () => { this.dirty = true; });
-    this.scene.add(this.theme.root, this.assists, this.guide, this.picks, this.plane, this.lattice.root);
+    this.scene.add(this.theme.root, this.assists, this.continuation, this.guide, this.picks, this.plane, this.lattice.root);
     this.renderer.info.autoReset = false;
     // Capture phase cancels scripted motion before OrbitControls handles the same input.
     for (const event of ['pointerdown', 'wheel', 'keydown']) document.addEventListener(event, this.interruptCamera, { capture: true, passive: true });
@@ -169,6 +173,7 @@ export class BoardView {
   }
 
   setState(state: ScenePosition, animate = false, durationMs = this.theme.motion.durationMs): void {
+    this.setContinuation(null, []);
     this.director.interrupt();
     this.theme.clearTransient();
     this.clearCapture();
@@ -216,6 +221,7 @@ export class BoardView {
   }
 
   setSelection(pieceId: number | null, moves: Move[]): void {
+    this.setContinuation(null, []);
     this.director.interrupt();
     this.selected = pieceId; this.moves = structuredClone(moves);
     this.hovered = null; this.hoverBox.visible = false;
@@ -279,6 +285,7 @@ export class BoardView {
       this.assists.add(this.markers);
     }
     this.updateFieldFocus();
+    this.buildContinuation();
     this.dirty = true;
   }
 
@@ -291,7 +298,7 @@ export class BoardView {
       matrix.makeScale(scale, scale, scale).setPosition(world(move.to));
       const color = new THREE.Color(move.capturedId === null ? 0xf4c35b : 0xe99536);
       if (active) color.lerp(new THREE.Color(0xffe7ad), 0.18);
-      else if (focused) color.multiplyScalar(0.5);
+      else if (focused) color.multiplyScalar(0.18);
       this.markers!.setMatrixAt(index, matrix); this.markers!.setColorAt(index, color);
       this.markerBackplates?.setMatrixAt(index, matrix);
     });
@@ -340,11 +347,41 @@ export class BoardView {
 
   setHover(cell: Cell | null): void {
     if (cell === this.hovered) return;
+    this.setContinuation(null, []);
     this.hovered = cell;
     this.hoverBox.visible = cell !== null && this.cellVisible(cell) && !this.moves.some(move => move.to === cell);
     if (cell !== null) this.hoverBox.position.copy(world(cell));
     this.updateFieldFocus();
     if (cell !== null && this.fieldMoves.some(m => m.to === cell)) this.present({ kind: 'trajectory', at: world(cell).toArray() });
+    this.dirty = true;
+  }
+
+  /** Engine-derived what-if field. Silver markers never enter the picking group. */
+  setContinuation(origin: Cell | null, moves: readonly Move[]): void {
+    if (origin === this.continuationOrigin && (moves === this.continuationMoves || (origin === null && !this.continuationMoves.length))) return;
+    this.continuationOrigin = origin;
+    this.continuationMoves = moves;
+    this.buildContinuation();
+  }
+
+  private buildContinuation(): void {
+    this.continuation.traverse(object => { if (object instanceof THREE.InstancedMesh) object.dispose(); });
+    this.disposeObject(this.continuation); this.continuation.clear();
+    const unique = [...new Map(this.continuationMoves.map(move => [move.to, move])).values()]
+      .filter(move => this.cellVisible(move.to));
+    this.continuationCells = unique.map(move => move.to);
+    if (this.continuationOrigin !== null && unique.length) {
+      const markers = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.085), this.goldMarkers.createMaterial('silver'), unique.length);
+      markers.layers.set(1); markers.renderOrder = 3.2;
+      const matrix = new THREE.Matrix4();
+      unique.forEach((move, index) => {
+        const size = move.capturedId === null ? 1 : 1.2;
+        matrix.makeScale(size, size, size).setPosition(world(move.to));
+        markers.setMatrixAt(index, matrix);
+        markers.setColorAt(index, new THREE.Color(move.capturedId === null ? 0xd7e4f0 : 0xaebed0));
+      });
+      markers.computeBoundingSphere(); this.continuation.add(markers);
+    }
     this.dirty = true;
   }
 
@@ -360,6 +397,7 @@ export class BoardView {
       points: position ? Array.from({ length: position.count }, (_, i) => [position.getX(i), position.getY(i), position.getZ(i)]) : [],
       dashed: line?.material instanceof THREE.LineDashedMaterial,
       surface: material ? { type: material.type, metalness: material.metalness, roughness: material.roughness, reflections: !!material.envMap } : null,
+      continuation: { origin: this.continuationOrigin, cells: [...this.continuationCells], interactive: false },
     };
   }
 
@@ -548,9 +586,10 @@ export class BoardView {
     if (this.theme.postprocessing?.preservePieceSilhouettes) this.camera.layers.enable(2);
     else this.camera.layers.disable(2);
     this.theme.postprocessing?.resize(this.host.clientWidth, this.host.clientHeight, this.renderer.getPixelRatio());
-    const hovered = this.hovered;
+    const hovered = this.hovered, continuationOrigin = this.continuationOrigin, continuationMoves = this.continuationMoves;
     if (this.state) this.setState(this.state);
     this.setSelection(this.selected, this.moves); this.setHover(hovered);
+    this.setContinuation(continuationOrigin, continuationMoves);
     this.renderSamples = []; this.dirty = true;
   }
 
@@ -600,6 +639,7 @@ export class BoardView {
   }
 
   dispose(): void {
+    this.setContinuation(null, []);
     this.clearCapture();
     for (const event of ['pointerdown', 'wheel', 'keydown']) document.removeEventListener(event, this.interruptCamera, true);
     this.reducedMotion.removeEventListener('change', this.motionPreferenceChanged);

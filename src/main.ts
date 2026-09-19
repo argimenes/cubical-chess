@@ -1,6 +1,6 @@
 import './style.css';
 import { decodeGame, encodeGame, gameFileName, moveLabel, SAVE_KEY, type HistoryEntry, type RestoredGame } from './app/saved-game';
-import { inspectCheck } from './app/inspect-move';
+import { inspectCheck, inspectContinuation } from './app/inspect-move';
 import { GameReplay } from './app/replay';
 import { commitMove, gameStatus, isInCheck, legalMoves, pieceAt, sideToMove, unmakeMove } from './rules/engine';
 import { coordinates, formatCell } from './rules/geometry';
@@ -79,7 +79,7 @@ app.innerHTML = `
         <div class="selected-heading"><span id="selected-glyph" class="selected-glyph">◇</span><div><h2 id="selected-name">Explore the cube</h2><p id="selected-position" class="mono">X · Y · Z</p></div></div>
         <p id="piece-rule" class="piece-rule">Select a piece to see how it moves through three dimensions.</p>
         <div id="move-explanation" class="move-explanation" aria-live="polite"><strong id="move-title">See the movement field</strong><p id="move-detail">Hover or focus a destination to inspect one move.</p></div>
-        <div class="field-legend"><span><i></i>Move</span><span><i class="capture"></i>Capture</span><span><i class="focus"></i>Inspect</span></div>
+        <div class="field-legend"><span><i></i>Move</span><span><i class="capture"></i>Capture</span><span><i class="focus"></i>Inspect</span><span><i class="silver"></i>Next move</span></div>
         <div class="dest-heading"><span class="section-title">LEGAL DESTINATIONS</span><strong id="legal-count">—</strong></div>
         <div id="destinations" class="destinations"><p class="muted small">Highlighted cells are safe moves for the selected piece.</p></div>
       </section>
@@ -90,7 +90,7 @@ app.innerHTML = `
   <dialog id="reset-dialog" aria-labelledby="reset-title" aria-describedby="reset-detail"><div class="dialog-kicker">START AGAIN</div><h2 id="reset-title">Reset this game?</h2><p id="reset-detail"></p><div class="reset-actions"><button id="cancel-reset" class="secondary-button" autofocus>Keep playing</button><button id="confirm-reset" class="primary-button">Reset game</button></div></dialog>
   <dialog id="import-dialog" aria-labelledby="import-title" aria-describedby="import-detail"><div class="dialog-kicker">LOAD GAME FILE</div><h2 id="import-title">Replace this game?</h2><p id="import-detail"></p><p>This replaces the current board, move history and automatic save. Use Save game first if you want to keep the current game.</p><div class="reset-actions"><button id="cancel-import" class="secondary-button" autofocus>Keep playing</button><button id="confirm-import" class="primary-button">Load game</button></div></dialog>
   <dialog id="promotion-dialog"><div class="dialog-kicker">THE FAR HOME PLANE</div><h2>Choose your promotion</h2><p>Your pawn has reached the opposing home plane.</p><div class="promotion-options">${(['queen', 'rook', 'bishop', 'knight'] as const).map(type => '<button data-promote="' + type + '"><strong>' + PIECE_LETTERS[type] + '</strong><span>' + type + '</span></button>').join('')}</div><button id="cancel-promotion" class="secondary-button">Cancel move</button></dialog>
-  <dialog id="help-dialog"><div class="dialog-kicker">WELCOME TO CUBICAL</div><h2>Find the move in the volume.</h2><p>White starts on Z = 0. Black starts on Z = 7. Select a piece to see its complete movement constellation. Hover a destination, or focus its button, to inspect one path. Gold markers indicate legal destinations; larger amber markers indicate captures. Click or press Enter to commit. On touchscreens, tap a destination to inspect it, then tap it again to move.</p><p>Drag to orbit; scroll or pinch to zoom. Use the camera presets to look through another face. When cells overlap, a depth chooser lets you select the exact coordinate. The piece navigator and destination list also work with a keyboard.</p><p>Four-direction pawns move into empty cells along ±Y or ±Z. They capture on X–Y or X–Z diagonals. A pawn reaches promotion at the opposite home Z plane.</p><p>A dashed knight guide illustrates just the inspected jump. Intervening cells do not block it. Moves exposing your king are excluded. The inspector can indicate a prospective check without changing the game.</p><p class="muted">Local two-player play and simple spatial symbols. Your game and move history are saved automatically in this browser and restored on reload. Save game downloads a JSON file; Load game restores its board and complete move history. Use the Move record controls to step through or play a replay. Pause stops the animation; Back to present restores live play. Replay never changes your saved game. Reset game starts the current position again after confirmation. Computer play and final piece designs come in later stages.</p><button id="close-help" class="primary-button">Enter the cube</button></dialog>
+  <dialog id="help-dialog"><div class="dialog-kicker">WELCOME TO CUBICAL</div><h2>Find the move in the volume.</h2><p>White starts on Z = 0. Black starts on Z = 7. Select a piece to see its complete movement constellation. Hover a destination, or focus its button, to inspect one path. Gold markers indicate legal destinations; larger amber markers indicate captures. Hover a gold marker to see a silver preview of the same piece’s potential following moves, assuming no opponent response. Silver markers are read-only. Click or press Enter to commit. On touchscreens, tap a destination to inspect it, then tap it again to move.</p><p>Drag to orbit; scroll or pinch to zoom. Use the camera presets to look through another face. When cells overlap, a depth chooser lets you select the exact coordinate. The piece navigator and destination list also work with a keyboard.</p><p>Four-direction pawns move into empty cells along ±Y or ±Z. They capture on X–Y or X–Z diagonals. A pawn reaches promotion at the opposite home Z plane.</p><p>A dashed knight guide illustrates just the inspected jump. Intervening cells do not block it. Moves exposing your king are excluded. The inspector can indicate a prospective check without changing the game.</p><p class="muted">Local two-player play and simple spatial symbols. Your game and move history are saved automatically in this browser and restored on reload. Save game downloads a JSON file; Load game restores its board and complete move history. Use the Move record controls to step through or play a replay. Pause stops the animation; Back to present restores live play. Replay never changes your saved game. Reset game starts the current position again after confirmation. Computer play and final piece designs come in later stages.</p><button id="close-help" class="primary-button">Enter the cube</button></dialog>
 `;
 
 const element = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -107,6 +107,7 @@ let lastGenerationMs = 0;
 let inspectedCell: Cell | null = null;
 let armedTouchCell: Cell | null = null;
 const inspectionCache = new Map<Cell, ReturnType<typeof inspectCheck>>();
+const continuationCache = new Map<Cell, ReturnType<typeof inspectContinuation>>();
 let view: BoardView;
 let replay: GameReplay | null = null;
 let replayPlaying = false;
@@ -124,6 +125,7 @@ const pieceRules: Record<PieceType, string> = {
 
 const visualPoint = (cell: Cell): Point3 => { const [x, y, z] = coordinates(cell); return [x - 3.5, z - 3.5, y - 3.5]; };
 function announce(text: string): void { element('notice').textContent = text; }
+function clearInspectionCache(): void { inspectionCache.clear(); continuationCache.clear(); }
 function closeDepth(): void { element('depth-chooser').hidden = true; }
 function setHover(cell: Cell | null, restoreFocus = true): void {
   const state = displayedState();
@@ -147,6 +149,9 @@ function setHover(cell: Cell | null, restoreFocus = true): void {
   if (move) {
     if (!inspectionCache.has(move.to)) inspectionCache.set(move.to, inspectCheck(state, candidates));
     const check = inspectionCache.get(move.to)!;
+    if (!continuationCache.has(move.to)) continuationCache.set(move.to, inspectContinuation(state, candidates));
+    const continuation = continuationCache.get(move.to)!;
+    view.setContinuation(move.to, continuation.moves);
     const captured = move.capturedId === null ? null : state.pieces[move.capturedId];
     const action = move.kind === 'jump' ? 'Jump' : move.kind === 'slide' ? 'Slide' : 'Step';
     const delta = coordinates(move.to).map((n, i) => n - coordinates(move.from)[i]).map(n => n > 0 ? '+' + n : String(n)).join(', ');
@@ -155,10 +160,15 @@ function setHover(cell: Cell | null, restoreFocus = true): void {
     if (move.promotion) details.push('Choose a promotion before committing.');
     if (check === 'yes') details.push('Gives check.');
     if (check === 'promotion-dependent') details.push('Check depends on the promotion choice.');
+    const nextCount = new Set(continuation.moves.map(m => m.to)).size;
+    details.push(continuation.terminal ? 'This move ends the game; no following move.'
+      : 'Silver: ' + nextCount + ' potential following destinations for this piece, assuming no opponent response.'
+        + (continuation.promotionDependent ? ' Includes all promotion choices.' : ''));
     element('move-title').textContent = action + ' to ' + formatCell(move.to);
     element('move-detail').textContent = details.join(' ');
     element('instruction').textContent = action + (captured ? ' · capture ' + captured.type : '') + (check === 'yes' ? ' · gives check' : '') + (armedTouchCell === cell ? ' · tap again to move' : ' · click or Enter to move');
   }
+  if (!move) view.setContinuation(null, []);
   if (replay) element('instruction').textContent = 'REPLAY · ' + replay.cursor + ' / ' + replay.length + ' · Return to present to play.';
   document.querySelectorAll<HTMLButtonElement>('.destination').forEach(button => button.classList.toggle('inspected', !!move && Number(button.dataset.inspectCell) === cell));
 }
@@ -175,7 +185,7 @@ function bindInspection(button: HTMLButtonElement, cell: Cell): void {
 
 function selectPiece(id: number | null): void {
   const state = displayedState();
-  closeDepth(); clearPreview(); inspectionCache.clear(); selected = id;
+  closeDepth(); clearPreview(); clearInspectionCache(); selected = id;
   if (id !== null && element<HTMLInputElement>('isolate').checked) {
     element<HTMLSelectElement>('plane').value = String(coordinates(state.pieces[id].cell!)[2]); updateOptions();
   }
@@ -218,7 +228,7 @@ function play(move: Move): void {
     history.push({ undo, label, owner });
     autosave();
     selected = null; available = [];
-    inspectionCache.clear(); view.setState(state, true); view.setSelection(null, []); clearPreview();
+    clearInspectionCache(); view.setState(state, true); view.setSelection(null, []); clearPreview();
     if (element<HTMLInputElement>('isolate').checked) {
       element<HTMLSelectElement>('plane').value = String(coordinates(move.to)[2]); updateOptions();
     }
@@ -349,7 +359,7 @@ function showReplay(index: number, animate = false): void {
   }
   const before = replay.cursor;
   replay.seek(index);
-  selected = null; available = []; inspectionCache.clear(); clearPreview(); closeDepth();
+  selected = null; available = []; clearInspectionCache(); clearPreview(); closeDepth();
   view.setState(replay.state, animate, 850);
   view.setSelection(null, []);
   updateOptions(); render();
@@ -394,7 +404,7 @@ element('replay-play').addEventListener('click', () => {
   replayFrame = requestAnimationFrame(replayTick);
 });
 element('replay-present').addEventListener('click', () => {
-  clearReplay(); selected = null; available = []; inspectionCache.clear(); clearPreview(); closeDepth();
+  clearReplay(); selected = null; available = []; clearInspectionCache(); clearPreview(); closeDepth();
   view.setState(state); view.setSelection(null, []); render(); updateOptions();
   announce('Back to present. ' + title(sideToMove(state)) + ' to play.');
 });
@@ -463,7 +473,7 @@ function startGame(nextSetup: SetupId, profile: ProfileId): void {
   state = createSetup(setup, profile); history.length = 0; selected = null; available = []; promotionMoves = [];
   element<HTMLSelectElement>('setup').value = setup;
   element<HTMLSelectElement>('profile').value = profile;
-  inspectionCache.clear(); clearPreview();
+  clearInspectionCache(); clearPreview();
   closeDepth(); view.setState(state); view.setSelection(null, []); render(); updateOptions();
   if (setup !== 'outer-planes') selectPiece(2);
   autosave();
@@ -494,7 +504,7 @@ function importGame(saved: RestoredGame, name: string): void {
   element<HTMLSelectElement>('profile').value = state.profile;
   element<HTMLSelectElement>('plane').value = 'all';
   element<HTMLInputElement>('isolate').checked = false;
-  inspectionCache.clear(); clearPreview(); closeDepth();
+  clearInspectionCache(); clearPreview(); closeDepth();
   view.director.interrupt(); view.setState(state); view.setSelection(null, []);
   render(); updateOptions(); autosave();
   fileStatus('Loaded ' + name + ' · ' + history.length + ' moves.');
@@ -576,7 +586,7 @@ element('undo').addEventListener('click', () => {
   if (replay) return;
   const entry = history.pop(); if (!entry) return;
   unmakeMove(state, entry.undo); autosave(); selected = null; available = [];
-  inspectionCache.clear(); view.setState(state); view.setSelection(null, []); clearPreview(); render(); announce('Move undone. ' + title(sideToMove(state)) + ' to play.');
+  clearInspectionCache(); view.setState(state); view.setSelection(null, []); clearPreview(); render(); announce('Move undone. ' + title(sideToMove(state)) + ' to play.');
 });
 function updateOptions(): void {
   const state = displayedState();

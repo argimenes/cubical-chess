@@ -24,13 +24,13 @@ export class GoldMarkers {
     } finally { generator.dispose(); disposeVisual(studio); }
   }
 
-  createMaterial(): THREE.MeshStandardMaterial {
+  createMaterial(finish: 'gold' | 'silver' = 'gold'): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
       color: 0xffffff, // Each instance supplies its gold or warm capture-gold tint.
-      metalness: 1, roughness: 0.23,
+      metalness: 1, roughness: finish === 'gold' ? 0.23 : 0.28,
       envMap: this.reflections.texture, envMapIntensity: 1,
       // A small floor keeps unlit facets discernible without flattening the reflections.
-      emissive: 0x422000, emissiveIntensity: 0.12,
+      emissive: finish === 'gold' ? 0x422000 : 0x101820, emissiveIntensity: 0.12,
       transparent: true, opacity: 1, depthTest: false, depthWrite: false,
     });
   }

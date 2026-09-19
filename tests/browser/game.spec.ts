@@ -8,7 +8,7 @@ interface Diagnostics {
   metrics(): { drawCalls: number; triangles: number; lastRenderMs: number; renders: number };
   camera(): number[];
   presentation(): { starTwinkle: boolean | null; lattice: { mode: string; frostedCells: boolean; localCells: number[]; localSegments: number }; optical: { refraction: boolean; spectral: boolean; caustics: boolean; inclusions: boolean } | null; theme: string; director: string; effects: boolean; geometries: number; textures: number; samples: number; medianSubmitMs: number; p95SubmitMs: number; target: number[] };
-  movementField(): { cells: number[]; focused: number | null; guideKind: string | null; guideCount: number; points: number[][]; dashed: boolean; inspectedCell: number | null; surface: { type: string; metalness: number; roughness: number; reflections: boolean } | null };
+  movementField(): { cells: number[]; focused: number | null; guideKind: string | null; guideCount: number; points: number[][]; dashed: boolean; inspectedCell: number | null; continuation: { origin: number | null; cells: number[]; interactive: boolean }; surface: { type: string; metalness: number; roughness: number; reflections: boolean } | null };
 }
 declare global { interface Window { __cubical: Diagnostics } }
 const cell = (x: number, y: number, z: number) => x + 8 * y + 64 * z;
