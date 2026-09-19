@@ -17,8 +17,12 @@ export function createSetup(id: SetupId, profile: ProfileId = 'prototype-1'): Ga
     const rank: PieceType[] = ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'];
     for (const owner of ['white', 'black'] as const) {
       const white = owner === 'white';
-      rank.forEach((type, x) => add(owner, type, x, white ? 1 : 6, white ? 0 : 7));
-      for (let x = 0; x < 8; x++) add(owner, 'pawn', x, white ? 2 : 5, white ? 0 : 7);
+      rank.forEach((type, x) => add(owner, type, x, white ? 0 : 7, white ? 0 : 7));
+      for (let x = 0; x < 8; x++) {
+        add(owner, 'pawn', x, white ? 1 : 6, white ? 0 : 7);
+        add(owner, 'pawn', x, white ? 1 : 6, white ? 1 : 6);
+        add(owner, 'pawn', x, white ? 0 : 7, white ? 1 : 6);
+      }
     }
   } else if (id === 'spatial-study') {
     add('white', 'king', 0, 0, 0); add('black', 'king', 7, 7, 7);
